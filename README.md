@@ -53,7 +53,7 @@ To read it:
 cat ~/devflow-monitor/sessions/<session-id>/report.md
 ```
 
-See [`examples/report_0.md`](examples/report_0.md) for a real example.
+See [`examples/report_0.md`](examples/report_0.md) for a real session report — includes a narrative overview with verdict and forward recommendation, an annotated health timeline explaining every score change, full anomaly detail with the exact tool input and resolution status, practical guidance per signal, and a "What We Can Learn" section.
 
 ---
 
