@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /home/danielle/projects/drivenets-assignment/devflow-monitor/hooks/post_tool_use.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /home/danielle/projects/drivenets-assignment/devflow-monitor/hooks/stop.py"
+          }
+        ]
+      }
+    ]
+  }
+}
