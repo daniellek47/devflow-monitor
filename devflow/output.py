@@ -11,15 +11,16 @@ _COLORS = {
 }
 
 
-def emit_status(turn: int, input_tokens: int, health: dict) -> None:
+def emit_status(turn: int, input_tokens: int, health: dict, duration_ms: int = 0) -> None:
     ratio = input_tokens / 200_000
     ts = _ts()
     color = _COLORS.get(health["level"], "")
     reset = _COLORS["RESET"]
     bar = _bar(ratio)
+    dur = f"  {duration_ms:,}ms" if duration_ms else ""
     print(
         f"[{ts}] turn={turn:3d}  ctx={bar}{ratio:4.0%}  "
-        f"tokens={input_tokens:,}  "
+        f"tokens={input_tokens:,}{dur}  "
         f"health={color}{health['level']}({health['score']}){reset}",
         file=sys.stderr, flush=True,
     )

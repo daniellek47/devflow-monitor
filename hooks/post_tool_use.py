@@ -75,7 +75,7 @@ def main() -> None:
     })
 
     # Emit live output
-    output.emit_status(state["turn_count"], sig["input_tokens"], health)
+    output.emit_status(state["turn_count"], sig["input_tokens"], health, sig["duration_ms"])
 
     if scores["context"]["level"] in ("WARN", "CRITICAL"):
         output.emit(
