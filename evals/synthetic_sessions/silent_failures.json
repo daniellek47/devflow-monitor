@@ -1,0 +1,67 @@
+{
+  "interactions": [
+    {
+      "tokens_used": 120000,
+      "context_fill_pct": 60.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 550,
+      "hedging_phrases": ["i think this will work", "might be the right call"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 130000,
+      "context_fill_pct": 65.0,
+      "finish_reason": "stop",
+      "error": true,
+      "response_length": 530,
+      "hedging_phrases": ["possibly a transient issue", "could retry this step"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 135000,
+      "context_fill_pct": 67.5,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 500,
+      "hedging_phrases": ["seems to be working now", "might have been temporary"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 140000,
+      "context_fill_pct": 70.0,
+      "finish_reason": "stop",
+      "error": true,
+      "response_length": 450,
+      "hedging_phrases": ["failing again silently", "i believe something is wrong"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 146000,
+      "context_fill_pct": 73.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 380,
+      "hedging_phrases": ["responses are getting shorter", "probably losing track of context"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 150000,
+      "context_fill_pct": 75.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 300,
+      "hedging_phrases": ["uncertain about what is happening", "not sure if this is working"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 155000,
+      "context_fill_pct": 77.5,
+      "finish_reason": "stop",
+      "error": true,
+      "response_length": 250,
+      "hedging_phrases": ["might be related to the error", "possibly a timing issue", "could be a connection problem"],
+      "completed_task": false
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "interactions": [
+    {
+      "tokens_used": 155000,
+      "context_fill_pct": 77.5,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 700,
+      "hedging_phrases": ["definitely going in the right direction", "absolutely the best way to handle this"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 160000,
+      "context_fill_pct": 80.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 680,
+      "hedging_phrases": ["obviously the only correct solution", "certainly no need to reconsider"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 163000,
+      "context_fill_pct": 81.5,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 500,
+      "hedging_phrases": ["undoubtedly the right implementation", "guaranteed to work correctly"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 165000,
+      "context_fill_pct": 82.5,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 480,
+      "hedging_phrases": ["for sure this is correct", "without a doubt the best approach here"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 168000,
+      "context_fill_pct": 84.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 400,
+      "hedging_phrases": ["definitely the correct implementation", "absolutely certain this solution is right", "clearly the best approach here now"],
+      "completed_task": true
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "interactions": [
+    {
+      "tokens_used": 120000,
+      "context_fill_pct": 60.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 700,
+      "hedging_phrases": ["i think this is the right direction", "might need some tuning"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 130000,
+      "context_fill_pct": 65.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 680,
+      "hedging_phrases": ["could be improved further", "probably the best option"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 138000,
+      "context_fill_pct": 69.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 640,
+      "hedging_phrases": ["might be drifting slightly", "i believe this still works"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 144000,
+      "context_fill_pct": 72.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 580,
+      "hedging_phrases": ["possibly off track now", "worth verifying the direction"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 149000,
+      "context_fill_pct": 74.5,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 500,
+      "hedging_phrases": ["responses getting shorter", "could be a sign of drift"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 153000,
+      "context_fill_pct": 76.5,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 420,
+      "hedging_phrases": ["the implementation looks reasonable", "this should handle most cases", "the approach seems workable"],
+      "completed_task": false
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "interactions": [
+    {
+      "tokens_used": 130000,
+      "context_fill_pct": 65.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 800,
+      "hedging_phrases": ["might want to reconsider", "could be a better approach", "i think we should check"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 145000,
+      "context_fill_pct": 72.5,
+      "finish_reason": "stop",
+      "error": true,
+      "response_length": 750,
+      "hedging_phrases": ["possibly the wrong direction", "i believe this could fail"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 158000,
+      "context_fill_pct": 79.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 700,
+      "hedging_phrases": ["might still work", "could try a different approach"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 167000,
+      "context_fill_pct": 83.5,
+      "finish_reason": "stop",
+      "error": true,
+      "response_length": 500,
+      "hedging_phrases": ["probably need to restart", "uncertain about this path"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 174000,
+      "context_fill_pct": 87.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 300,
+      "hedging_phrases": ["maybe try something else", "not sure this is right"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 179000,
+      "context_fill_pct": 89.5,
+      "finish_reason": "stop",
+      "error": true,
+      "response_length": 200,
+      "hedging_phrases": ["i think we are stuck", "might need to give up"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 183000,
+      "context_fill_pct": 91.5,
+      "finish_reason": "stop",
+      "error": true,
+      "response_length": 150,
+      "hedging_phrases": ["could try once more", "possibly fixable"],
+      "completed_task": false
+    },
+    {
+      "tokens_used": 186000,
+      "context_fill_pct": 93.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 100,
+      "hedging_phrases": ["definitely the right approach", "absolutely certain this is correct", "obviously the best solution here"],
+      "completed_task": false
+    }
+  ]
+}

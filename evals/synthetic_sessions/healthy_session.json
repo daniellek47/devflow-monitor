@@ -1,0 +1,49 @@
+{
+  "interactions": [
+    {
+      "tokens_used": 72000,
+      "context_fill_pct": 36.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 600,
+      "hedging_phrases": ["might be worth checking", "i think this could work", "probably the right approach"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 82000,
+      "context_fill_pct": 41.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 620,
+      "hedging_phrases": ["let me verify this first", "could potentially work here", "might need some adjustment"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 88000,
+      "context_fill_pct": 44.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 580,
+      "hedging_phrases": ["i believe this is correct", "possibly the best path forward"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 95000,
+      "context_fill_pct": 47.5,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 610,
+      "hedging_phrases": ["might want to double-check this", "i think we should verify", "could be improved later"],
+      "completed_task": true
+    },
+    {
+      "tokens_used": 100000,
+      "context_fill_pct": 50.0,
+      "finish_reason": "stop",
+      "error": false,
+      "response_length": 605,
+      "hedging_phrases": ["i think this approach might work", "it could potentially succeed", "worth verifying the result"],
+      "completed_task": true
+    }
+  ]
+}
