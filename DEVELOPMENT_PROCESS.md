@@ -416,6 +416,184 @@ updates the model of the system.
 
 ---
 
+## Iteration — Eval Harness
+
+After all the bugs above were fixed and the tool was in a stable state, a gap remained: there was no
+automated way to verify that the full scoring pipeline — all five signals combined into an overall
+health score — behaved correctly across realistic session shapes. The 54 unit tests covered
+individual scorer functions at threshold boundaries. They could not catch a scenario where correct
+individual scores combined into the wrong overall outcome, or where a weight change shifted a
+session that should be WARN into GOOD.
+
+The eval harness (`evals/eval_harness.py`) was added to close this gap.
+
+**What it does:** Replays five synthetic session JSON files through `scorer.py` directly (bypassing
+hooks, signals, and the transcript system). For each session it computes a final health score, a
+recommended action (continue / verify / start_fresh), and an anomaly count. It compares these
+against golden outputs with tolerances — score ±10, action exact, anomaly count ±1 — and prints a
+results table. Before saving the results JSON, it loads the previous run to detect regressions.
+
+**Why synthetic sessions, not real ones:** Real session data from `sessions/*/events.jsonl` would
+also work as inputs, but synthetic sessions have a critical advantage: the expected output is
+computed analytically before writing a line of code, then verified by running the harness. The
+golden values are not captured from a run and frozen — they are derived. This means a scorer change
+that produces a wrong result is detected even if the harness has never seen "correct" output from
+the changed code.
+
+**What the five sessions test:**
+
+| Session | Scenario | Key signals triggered |
+|---------|----------|-----------------------|
+| `healthy_session` | Clean session, no problems | All GOOD/OK — should stay "continue" |
+| `context_degraded` | Context, trend, errors, and overconfidence all failing | 4 anomalies — should reach "start_fresh" |
+| `instruction_drift` | Context and trend both at WARN, no errors | 2 anomalies — should reach "verify" |
+| `confident_wrong` | Overconfidence + context + declining output | 3 anomalies — verify not start_fresh (score 60, not critical) |
+| `silent_failures` | Errors just crossing CRITICAL threshold | 3 anomalies — error weight tips score below 55 into "start_fresh" |
+
+The `confident_wrong` and `silent_failures` cases are the most diagnostic: they test that the
+weighted combination pushes the score to the right side of a threshold. `confident_wrong` lands
+at 60 (WARN → verify) because overconfidence only carries 10% weight. `silent_failures` lands at
+50 (CRITICAL → start_fresh) because error rate at 43% carrying 20% weight is enough to push the
+weighted total below 55.
+
+**When to run it:** Any time `scorer.py` is modified — threshold changes, weight adjustments, or
+new signals. It runs in under a second and exits 1 on failure, so it can be chained with the unit
+tests for CI:
+
+```bash
+python3 -m pytest tests/test_scorer.py -v && python3 evals/eval_harness.py
+```
+
+---
+
+## Testing and Evaluation Across Project Stages
+
+Different validation methods were used at different stages of the project. No single method was
+sufficient. This section maps what was used, when, and what each approach caught (and missed).
+
+### Stage 1 — Initial implementation (`cf7cdda`)
+
+**Method used:** None. The full implementation was written in one pass, and the response was:
+*"try it out."*
+
+**What it caught:** Nothing yet.
+
+**What it missed:** The token extraction bug. The code ran silently with zero token counts for six
+turns. No automated check, no visual output to inspect — just wrong data accumulating in state.json.
+
+**Lesson:** Writing code without any observable output path is the highest-risk phase. The first
+thing to do after an AI writes integration code is run it on real input and read the output.
+
+---
+
+### Stage 2 — Live session test (after `cf7cdda`, before `f558842`)
+
+**Method used:** Running the tool on a real Claude Code session. No formal test — just installing
+the hooks and asking a question.
+
+**What it caught:** Token counts were all zero. The real payload structure had nothing in common
+with what the code assumed. This was caught within minutes of the first real run.
+
+**What it missed:** Nothing structural — the observable output (zero tokens, zero context pressure)
+made the bug immediately obvious.
+
+**Lesson:** This is the most important validation step for any code that touches external systems.
+Unit tests cannot cover wrong assumptions about external data formats.
+
+---
+
+### Stage 3 — Unit tests + visualization (`dbb4298`)
+
+**Method used:** 54 boundary-case unit tests for `scorer.py`. Visual scorer walkthrough
+(`tests/visualize_scorer.py`) that renders each function's full output curve.
+
+**What it caught:** The overconfidence visualization showed GOOD(100) for every row — including
+"max certainty" inputs — because the sample labels were all under 60 characters (below the
+scorer's minimum-length guard). The visualization caught that the test inputs were unrepresentative,
+not that the scorer logic was wrong.
+
+**What it missed:** Everything outside `scorer.py`. The hook orchestration, the session state
+management, the output path, the report generator — none of it was covered.
+
+**Lesson:** Unit tests at a pure-function boundary give high confidence in the math. They give zero
+confidence in the system. The distinction matters more than it looks.
+
+---
+
+### Stage 4 — Live session analysis (`fe7927a`, `f1aabc7`)
+
+**Method used:** Running an 89-turn session and manually inspecting `events.jsonl` and `health.log`.
+Not a test — a structured observation. Three findings documented.
+
+**What it caught:**
+- Length trend firing CRITICAL during healthy work (silent tool call false positives)
+- Overconfidence permanently at GOOD(100) in code-writing context
+- Alternating long/short responses do NOT cause false positives (hypothesis rejected)
+
+**What it missed:** The hardcoded values in the report generator (found differently, see below).
+
+**Lesson:** Real-session analysis answers questions unit tests cannot: "does the signal behave
+sensibly in practice?" Calibration problems are invisible until you run the system on real data
+and read the output skeptically.
+
+---
+
+### Stage 5 — Code review prompted by user questions (`11beac5`)
+
+**Method used:** A direct question: *"The 'What We Can Learn' section — are the arithmetic examples
+in the report computed from actual session values or hardcoded?"*
+
+**What it caught:** Three literal values from the development session were hardcoded in the report
+narrative. The bug was in valid Python — no syntax error, no crash, and no test covered the
+reporter. Only a human reading the output and questioning it found the problem.
+
+**What it missed:** Nothing further — the code review was comprehensive once triggered.
+
+**Lesson:** AI-generated code that produces plausible output is not necessarily correct output. The
+most effective validation technique in this project was reading the output with skepticism and
+asking direct questions about whether values were computed or assumed.
+
+---
+
+### Stage 6 — Eval harness (`33c3638`)
+
+**Method used:** Five synthetic sessions with analytically-derived golden outputs. Scores and
+actions computed by hand before running the harness. All five cases designed to test specific
+failure modes and threshold boundaries at the pipeline level.
+
+**What it catches:** Scorer weight changes that shift a session's outcome. Action threshold
+boundary errors (e.g., score 54 vs 55 determining verify vs start_fresh). Anomaly count logic
+errors. Regressions introduced by future changes to `scorer.py`.
+
+**What it misses:** Everything the unit tests miss too — `signals.py`, hook orchestration,
+`reporter.py`. Also misses domain miscalibration: a synthetic session designed to hit WARN will
+hit WARN regardless of whether the WARN threshold is correctly placed for real Claude Code
+sessions.
+
+**Lesson:** Eval harnesses are most valuable as regression guards after the initial calibration
+is done. They freeze the behavior you have decided is correct and alert you when future changes
+break it.
+
+---
+
+### Summary: what each method covers
+
+| Method | Layer covered | Bugs it can catch | Bugs it cannot catch |
+|--------|--------------|------------------|---------------------|
+| Unit tests (`test_scorer.py`) | `scorer.py` only | Threshold math, off-by-one, edge cases | Wrong data from external systems, pipeline bugs |
+| Visual verification (`visualize_scorer.py`) | `scorer.py` only | Miscalibrated samples, flat curves | Same as unit tests |
+| Live session test | Full system | Wrong assumptions about external formats | Subtle calibration errors |
+| Live session analysis | Full system, real data | Domain miscalibration, false positives | Hardcoded values in untested modules |
+| User code review | Any module | AI-generated plausible-but-wrong output | Silent failures, calibration |
+| Eval harness (`eval_harness.py`) | `scorer.py` pipeline | Regression from weight/threshold changes | Signal extraction, hooks, report correctness |
+
+The pattern across all six stages: **the closer to the system boundary a validation method sits,
+the more real bugs it finds, and the harder it is to automate.** The unit tests were easiest to
+write and caught the least. The live session test required no code at all and caught the most
+critical bug in the project.
+
+---
+
 ## What remains unverified
 
 - The tool's behavior when Claude Code restarts mid-session with the same `session_id`
