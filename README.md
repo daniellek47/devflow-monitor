@@ -16,7 +16,7 @@ python3 install.py --global
 
 That's it. No dependencies. Python 3.8+ only.
 
-`--global` registers the hooks in `~/.claude/settings.json` so every Claude Code session on your machine is monitored automatically, regardless of which project you open.
+`--global` registers the hooks in `~/.claude/settings.json` so every Claude Code session on your machine is monitored automatically, regardless of which project you open. It also installs the `/devflow-log` skill globally so you can open a live log window from any session.
 
 ---
 
@@ -59,14 +59,21 @@ See [`examples/report_0.md`](examples/report_0.md) for a real session report —
 
 ## Watching health from a second terminal
 
-Health lines also write to a plain-text log file (`health.log`) inside the session directory. Open a second terminal and run:
+Health lines also write to a plain-text log file (`health.log`) inside the session directory. The easiest way to open a live log window is the `/devflow-log` skill — type it in any Claude Code session:
 
-```bash
-cd ~/devflow-monitor
-tail -f sessions/$(ls -t sessions/ | head -1)/health.log
+```
+/devflow-log
 ```
 
-This follows the most recent session in real time, no ANSI codes, no TUI. Useful when the Claude Code terminal is in another window or when you want to share the stream with someone watching over your shoulder.
+On Windows Terminal (WSL2) this opens a new tab. Inside a tmux session it opens a new window named `devflow`. Both follow the active session automatically.
+
+You can also use the `tail-health` script directly from any terminal:
+
+```bash
+~/devflow-monitor/tail-health
+```
+
+`sessions/latest` is a symlink that always points to the most recently active session, so this script works from anywhere without knowing the session ID. It waits silently if no session has started yet.
 
 To follow a specific session by ID:
 
@@ -102,7 +109,7 @@ All data is written to `~/devflow-monitor/sessions/`, regardless of which projec
 └── report.md     # full report, written when the session ends
 ```
 
-The last 10 sessions are kept. Older ones are deleted automatically when a session ends.
+The last 3 sessions are kept. Older ones are deleted automatically when a session ends.
 
 ---
 
@@ -161,10 +168,15 @@ devflow-monitor/
 ├── hooks/
 │   ├── post_tool_use.py # PostToolUse hook — runs after every tool call
 │   └── stop.py          # Stop hook — generates the session report
-├── sessions/            # runtime data (gitignored)
+├── .claude/
+│   └── skills/
+│       └── devflow-log/ # /devflow-log skill (deployed globally by install.py --global)
+│           └── SKILL.md
+├── sessions/            # runtime data (gitignored); sessions/latest symlinks to active session
 ├── examples/
 │   └── report_0.md      # real session report for reference
-├── install.py           # registers hooks in Claude Code settings
+├── install.py           # registers hooks + deploys skill to ~/.claude/skills/
+├── tail-health          # opens live health log from any directory
 └── tests/
     ├── test_scorer.py       # 54 boundary-case unit tests
     └── visualize_scorer.py  # visual scorer calibration tool
