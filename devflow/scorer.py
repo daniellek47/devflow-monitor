@@ -53,6 +53,10 @@ def score_response_length_trend(output_token_history: List[int]) -> dict:
         return {"score": 75, "level": "OK", "trend": "slight_decline", "change_pct": round(change * 100, 1)}
     return {"score": 100, "level": "GOOD", "trend": "stable", "change_pct": round(change * 100, 1)}
 
+# NOTE: This is a heuristic, not a reliable signal.
+# Documented limitation: certainty vocabulary varies by task type.
+# A refactoring task produces fewer hedges than an analysis task by nature.
+# Weight kept low (10%) intentionally. See PDF section 4.
 
 def score_error_rate(errors: int, total: int) -> dict:
     if total == 0:

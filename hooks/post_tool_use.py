@@ -51,27 +51,41 @@ def main() -> None:
     }
     health = scorer.overall_health(scores)
 
-    # Record anomalies
-    ts_label = f"turn {state['turn_count']}"
+    # Record anomalies as structured objects for rich report rendering
+    turn_num = state["turn_count"]
+    ts_now = datetime.now().strftime("%H:%M:%S")
     if scores["repetition"]["level"] in ("WARN", "CRITICAL"):
-        state["anomalies"].append(
-            f"{ts_label}: repeated tool call '{sig['tool_name']}' "
-            f"({scores['repetition']['repeat_count']}x in last 6 calls)"
-        )
+        state["anomalies"].append({
+            "type": "repetition",
+            "turn": turn_num,
+            "ts": ts_now,
+            "tool_name": sig["tool_name"],
+            "tool_input": sig["tool_input"],
+            "repeat_count": scores["repetition"]["repeat_count"],
+            "score": scores["repetition"]["score"],
+        })
     if scores["overconfidence"]["level"] in ("WARN", "CRITICAL"):
-        state["anomalies"].append(
-            f"{ts_label}: overconfidence signal "
-            f"(certainty_ratio={scores['overconfidence']['certainty_ratio']})"
-        )
+        state["anomalies"].append({
+            "type": "overconfidence",
+            "turn": turn_num,
+            "ts": ts_now,
+            "certainty_ratio": scores["overconfidence"]["certainty_ratio"],
+            "score": scores["overconfidence"]["score"],
+        })
     if sig["is_error"]:
-        state["anomalies"].append(
-            f"{ts_label}: tool error — {sig['tool_name']}"
-        )
+        state["anomalies"].append({
+            "type": "tool_error",
+            "turn": turn_num,
+            "ts": ts_now,
+            "tool_name": sig["tool_name"],
+        })
 
     state.setdefault("signal_history", []).append({
-        "ts": datetime.now().strftime("%H:%M:%S"),
+        "turn": turn_num,
+        "ts": ts_now,
+        "input_tokens": sig["input_tokens"],
         "health": health,
-        "scores": {k: v["score"] for k, v in scores.items()},
+        "scores": {k: {"score": v["score"], "level": v["level"]} for k, v in scores.items()},
     })
 
     # Emit live output
