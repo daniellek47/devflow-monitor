@@ -40,11 +40,16 @@ def main() -> None:
     })
     state["last_tool_calls"] = state["last_tool_calls"][-20:]
 
+    # Only track turns where Claude actually wrote text — silent tool calls
+    # (mkdir, git add, etc.) have empty response_text and would collapse the
+    # late-window average with near-zero values.
+    if sig["response_text"].strip():
+        state.setdefault("response_lengths", []).append(len(sig["response_text"]))
+
     # Score all signals
-    output_history = [t["output_tokens"] for t in state["token_history"]]
     scores = {
         "context":        scorer.score_context_pressure(sig["input_tokens"]),
-        "length_trend":   scorer.score_response_length_trend(output_history),
+        "length_trend":   scorer.score_response_length_trend(state.get("response_lengths", [])),
         "error_rate":     scorer.score_error_rate(state["tool_errors"], state["tool_total"]),
         "overconfidence": _score_text_once(state, sig),
         "repetition":     scorer.score_repetition(

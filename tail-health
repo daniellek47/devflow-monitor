@@ -1,0 +1,10 @@
+#!/bin/bash
+DEVFLOW_DIR="$(cd "$(dirname "$0")" && pwd)"
+LOG="$DEVFLOW_DIR/sessions/latest/health.log"
+
+if [ ! -e "$LOG" ]; then
+    echo "Waiting for a session to start..." >&2
+    until [ -e "$LOG" ]; do sleep 1; done
+fi
+
+exec tail -f "$LOG"

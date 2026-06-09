@@ -30,7 +30,6 @@ def score_context_pressure(input_tokens: int) -> dict:
         return {"score": 75, "level": "OK", "ratio": ratio}
     return {"score": 100, "level": "GOOD", "ratio": ratio}
 
-
 def score_response_length_trend(output_token_history: List[int]) -> dict:
     if len(output_token_history) < 4:
         return {"score": 100, "level": "GOOD", "trend": "insufficient_data", "change_pct": 0.0}
