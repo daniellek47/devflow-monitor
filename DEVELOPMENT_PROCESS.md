@@ -176,6 +176,109 @@ signal runs, finds text below 60 chars, and returns GOOD(100) by default. The si
 more useful as a flag for verbose turns than as a session-wide health indicator. This is a known
 limitation, not a bug.
 
+---
+
+## Iteration — Health Lines Not Visible in Claude Code Terminal
+
+After installing the hooks and running a real session, the health output was confirmed to be
+reaching `events.jsonl` (the hook was running), but nothing appeared in the Claude Code terminal
+where it was expected.
+
+**The bug:** The hooks wrote to `sys.stderr`. Claude Code's TUI rerenders the terminal after every
+tool call and discards the stderr of hook subprocesses in the process. The hook output was
+generated and lost before any human could read it.
+
+**How it was found:** The user noticed that events were accumulating in `events.jsonl` — meaning
+the hook ran successfully — but the expected health line (`[HH:MM:SS] turn=...`) never appeared
+in the terminal. The events log proved the hook was not crashing; the output was being swallowed.
+
+**The fix:** `output.py` was rewritten to open `/dev/tty` directly and write there instead of
+stderr. `/dev/tty` is the terminal device for the current process — writing to it bypasses the TUI
+layer entirely and appears immediately in the terminal regardless of stdout/stderr redirection. A
+fallback to stderr was kept for environments where `/dev/tty` is unavailable (e.g., CI).
+
+```python
+def _print(text: str) -> None:
+    try:
+        with open("/dev/tty", "w") as tty:
+            tty.write(text + "\n")
+            tty.flush()
+    except Exception:
+        print(text, file=sys.stderr, flush=True)
+```
+
+After the fix, health lines appeared live in the terminal on every tool call.
+
+---
+
+## Iteration — health.log Not Created
+
+After adding the per-session `health.log` file (plain-text ANSI-stripped copy of health output,
+for monitoring from a second terminal), the log file did not appear in the session directory after
+running a session.
+
+**The bug:** The `post_tool_use.py` hook called `output.set_log_file(session_path / "health.log")`
+before the session directory existed. The write silently failed with a `FileNotFoundError` caught
+inside the `_print` exception handler, so no log was written.
+
+**How it was found:** The user tried `tail -f sessions/<id>/health.log` and got "No such file or
+directory" even after a session had run. Adding a `print` inside the exception handler in `_print`
+confirmed the directory was missing when the first write attempted.
+
+**The fix:** Added `session_path.mkdir(parents=True, exist_ok=True)` immediately before the
+`set_log_file` call in `post_tool_use.py`:
+
+```python
+session_path = session.get_session_path(sid)
+session_path.mkdir(parents=True, exist_ok=True)   # ← added
+output.set_log_file(session_path / "health.log")
+```
+
+The directory was being created later (in `session.save_state`), but `set_log_file` was called
+before any state was saved. The fix moved directory creation to the earliest point it was needed.
+
+---
+
+## Iteration — Hardcoded Values in Report "What We Can Learn" Section
+
+After the report was working end-to-end, the user asked: *"The 'What We Can Learn' section — are
+the arithmetic examples in the report computed from actual session values or hardcoded?"*
+
+**The bug:** Code review revealed that three specific values in `_section_learnings` were
+hardcoded to the session used while writing the reporter:
+
+- `"as happened here at 16:57:32"` — a literal timestamp from the demo session, wrong for any
+  other session
+- `"health stayed GOOD(80)"` — a literal health score from when the demo session's length trend
+  went CRITICAL, wrong if a different session had a different score at that moment
+- `"The repetition anomaly (turn 16)"` — a literal turn number from the demo session's first
+  anomaly, wrong for any other session
+
+The narrative *appeared* data-driven — it used `{peak_pct:.0%}` and `{ts}` for some values —
+so the hardcoding was not immediately obvious from reading the code. The bug only surfaced because
+the user explicitly questioned whether the output was computed or templated.
+
+**How it was found:** Code review of `reporter.py`, prompted by the user's direct question.
+No test existed that would have caught it — the reporter has no automated tests, and the hardcoded
+values happen to be valid Python f-string literals rather than obvious string constants.
+
+**The fix:** Each hardcoded value was replaced with a computation from the actual session data:
+
+- Timestamp: `signal_history[facts["first_warn_idx"]].get("ts", "")` — the actual timestamp of
+  the first WARN transition; omitted entirely if no WARN occurred
+- Health score at CRITICAL: `signal_history[first_critical_idx]["health"]["score"]` and
+  `["level"]` — the actual score and level at the moment the length signal went CRITICAL
+- Turn number: `anomalies[0].get("turn")` for dict-format anomalies, regex extraction of
+  `"turn N"` for legacy string anomalies
+- Health drop: `signal_history[turn_num - 2]["health"]["score"]` and
+  `signal_history[turn_num - 1]["health"]["score"]` — actual before/after health at the anomaly
+  turn, with a "Health dipped slightly" fallback when the turn index cannot be resolved
+
+This is a class of bug that is easy to introduce when building a report generator against a single
+representative session: values that happen to be data-derived in the obvious places but are
+accidentally hardcoded in the explanatory prose. The fix is systematic: every number that appears
+in the output should trace to a variable, not a literal.
+
 ### Bugs caught by tests
 
 **Caught by visualization:** The short-text guard in `score_overconfidence` silently neutralized
@@ -187,7 +290,14 @@ visual output, this would have looked correct.
 tests for `scorer.py` all passed. The end-to-end behavior was wrong. Only running the tool on a
 real session revealed the issue.
 
-### What remains unverified
+**Caught by code review (user question):** The hardcoded values in `_section_learnings`. No test
+would have caught this — the reporter is untested. The bug surfaced because the user asked a direct
+question about whether the output was computed from data. The lesson: a human reading the output
+with skepticism found what automated tests missed.
+
+---
+
+## What remains unverified
 
 - The tool's behavior when Claude Code restarts mid-session with the same `session_id`
 - Whether `duration_ms` accurately reflects slow vs. fast tool calls across tool types
