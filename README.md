@@ -85,7 +85,8 @@ All data is written to `~/devflow-monitor/sessions/`, regardless of which projec
 To watch health lines live from a second terminal (plain text, no ANSI):
 
 ```bash
-tail -f ~/devflow-monitor/sessions/$(ls -t ~/devflow-monitor/sessions/ | head -1)/health.log
+cd ~/path/to/devflow-monitor
+tail -f sessions/$(ls -t sessions/ | head -1)/health.log
 ```
 
 ---
