@@ -1,59 +1,90 @@
 # DevFlow Monitor
 
-A passive Claude Code session health monitor that observes hook events, scores health signals, detects anomalies, and generates a session report — without touching your workflow.
+A passive Claude Code session health monitor. It hooks into every tool call, scores five health signals in real time, and writes a session report when you're done — without changing how you work.
 
-## What it does
-
-DevFlow Monitor hooks into Claude Code's event system and watches each tool call as it happens. It tracks:
-
-- **Context window pressure** — how close you are to the model's token limit
-- **Response length trend** — whether answers are getting shorter over time (a sign of context degradation)
-- **Tool error rate** — frequency of failed tool calls
-- **Overconfidence signals** — heuristic detection of certainty language without hedging
-- **Repetition / stuck loops** — same tool being called repeatedly with the same inputs
-
-Every tool call emits a timestamped health line to stderr. When the session ends, a Markdown report is written to `sessions/<session_id>/report.md`.
-
-## How it works
-
-```
-Claude Code tool call
-        │
-        ▼
-  PostToolUse hook ──► reads session state
-                   ──► scores signals (heuristics only, no extra API calls)
-                   ──► emits timestamped line to stderr
-                   ──► writes updated state to sessions/<id>/state.json
-
-  Stop hook        ──► reads all state
-                   ──► writes sessions/<id>/report.md
-```
-
-All signal evaluation is done with local heuristics — no extra API calls, no external services.
-
-## Output
-
-Live output (stderr):
-
-```
-[10:32:01] turn=  1  ctx=██░░░░░░░░ 18%  tokens=36,412  health=GOOD(94)
-[10:32:15] turn=  2  ctx=███░░░░░░░ 24%  tokens=48,201  health=GOOD(91)
-[10:45:03] turn= 12  ctx=████████░░ 78%  tokens=156,882  health=WARN(61)
-[10:45:03] WARN     context window pressure (156,882 tokens / 78%)
-[10:45:03] WARN     response length trending down (change=-31%)
-```
-
-Final report (`sessions/<id>/report.md`): see [`examples/report_0.md`](examples/report_0.md) for a real session — includes a narrative overview, annotated health timeline, anomaly detail with the exact tool input and resolution status, practical recommendations, and a "What We Can Learn" section.
-
-## Setup
-
-Hooks are project-scoped and configured in `.claude/settings.json`. Run the installer to register them:
+## Quick start
 
 ```bash
-python3 install.py
+git clone https://github.com/daniellek47/devflow-monitor.git
+cd devflow-monitor
+python3 install.py --global
 ```
 
-This writes the hook commands with absolute paths into `.claude/settings.json`.
+That's it. Open any Claude Code session anywhere on your machine and monitoring starts automatically.
+
+## What you see
+
+A timestamped health line appears in the terminal after every tool call:
+
+```
+[16:03:46] turn=  1  ctx=██░░░░░░░░  18%  tokens=36,412  dur=1204ms  health=GOOD(100)
+[16:57:32] turn= 38  ctx=█████░░░░░  56%  tokens=111,676  dur=843ms  health=WARN(71)
+[16:57:32] WARN     context window pressure (111,676 tokens / 56%)
+[16:57:32] CRITICAL response length trending down (change=-52%)
+```
+
+When the session ends, a Markdown report is written to `sessions/<session_id>/report.md` inside the devflow-monitor directory. See [`examples/report_0.md`](examples/report_0.md) for a real session — includes a narrative overview, annotated health timeline, anomaly detail with the exact tool input and resolution status, practical recommendations, and a "What We Can Learn" section.
+
+## What it monitors
+
+| Signal | Weight | What it means |
+|--------|--------|---------------|
+| Context pressure | 35% | Token usage as a fraction of the 200k limit |
+| Response length trend | 25% | Whether output tokens are falling over the last 10 turns |
+| Tool error rate | 20% | Fraction of tool calls that returned errors |
+| Overconfidence | 10% | Certainty words vs. hedging words in Claude's prose |
+| Repetition | 10% | Same tool + input called multiple times in a 6-call window |
+
+Overall health score: **GOOD ≥ 80 · WARN 55–79 · CRITICAL < 55**
+
+## Installation
+
+### Global (recommended) — monitors every Claude Code session
+
+```bash
+git clone https://github.com/daniellek47/devflow-monitor.git
+cd devflow-monitor
+python3 install.py --global
+```
+
+Writes hooks into `~/.claude/settings.json`. All Claude Code sessions on this machine are monitored from that point on.
+
+### Project-scoped — monitors only one project
+
+Run from inside the project you want to monitor:
+
+```bash
+python3 /path/to/devflow-monitor/install.py
+```
+
+Writes hooks into `.claude/settings.json` in the current directory.
+
+### Uninstall
+
+```bash
+# global
+python3 install.py --global --uninstall
+
+# project-scoped
+python3 install.py --uninstall
+```
+
+## Where reports are stored
+
+All session data is written to the `sessions/` directory inside the devflow-monitor repo, regardless of which project you're working in:
+
+```
+devflow-monitor/
+└── sessions/
+    └── <session-id>/
+        ├── state.json    # live state updated on every tool call
+        ├── events.jsonl  # raw event log (one line per tool call)
+        └── report.md     # written when the session ends
+```
+
+## Requirements
+
+Python 3.8+, standard library only. No packages to install.
 
 ## Project structure
 
@@ -66,14 +97,13 @@ devflow-monitor/
 │   ├── output.py       # formatted stderr output
 │   └── reporter.py     # Markdown report generator
 ├── hooks/
-│   ├── post_tool_use.py   # PostToolUse hook
-│   └── stop.py            # Stop hook → generates report
-├── sessions/              # runtime session state + reports (gitignored)
-├── install.py             # registers hooks in .claude/settings.json
+│   ├── post_tool_use.py   # PostToolUse hook — runs after every tool call
+│   └── stop.py            # Stop hook — generates the session report
+├── sessions/              # runtime data (gitignored)
+├── examples/
+│   └── report_0.md        # real session report for reference
+├── install.py             # registers hooks in Claude Code settings
 └── tests/
-    └── test_scorer.py
+    ├── test_scorer.py     # 54 boundary-case unit tests
+    └── visualize_scorer.py
 ```
-
-## Requirements
-
-Python 3.8+, stdlib only. No dependencies to install.
