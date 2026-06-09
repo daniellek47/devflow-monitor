@@ -43,7 +43,7 @@ Live output (stderr):
 [10:45:03] WARN     response length trending down (change=-31%)
 ```
 
-Final report (`sessions/<id>/report.md`): summary table, signal history, anomalies detected, and recommendations.
+Final report (`sessions/<id>/report.md`): see [`examples/report_0.md`](examples/report_0.md) for a real session — includes a narrative overview, annotated health timeline, anomaly detail with the exact tool input and resolution status, practical recommendations, and a "What We Can Learn" section.
 
 ## Setup
 
