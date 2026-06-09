@@ -83,6 +83,36 @@ Anomalies are stored as structured dicts (since the educational report update):
 ```
 The reporter handles legacy string anomalies (from before this change) by reading `events.jsonl` to enrich them with tool input.
 
+## Known limitations
+
+### Silent tool calls cause false CRITICAL on length trend
+
+Silent bash commands (`mkdir`, `git add`, file writes with no output) produce a 94-character empty JSON wrapper as their tool response. These register as near-zero output tokens and collapse the late-window average dramatically, triggering CRITICAL even during a healthy session:
+
+```python
+burst_short = [700, 720, 680, 710, 700, 50, 60, 45, 55, 50]
+score_response_length_trend(burst_short)
+# → {'score': 20, 'level': 'CRITICAL', 'change_pct': -92.6}
+```
+
+The scorer logic is correct. The design assumption is wrong: it assumes all output tokens reflect reasoning quality. The correct fix is filtering the length trend to assistant text turns only, not tool response tokens. Not implemented — would require a meaningful architectural change to how signals are extracted.
+
+### Overconfidence scorer is inactive in code-writing context
+
+The overconfidence scorer returned GOOD(100) on every turn of a real 89-turn session. Claude Code's language is assertive by nature — it writes code and explains decisions without hedging. Words like "definitely" and "obviously" are rare in engineering output. The certainty word list was calibrated for conversational text. Weight kept at 10% intentionally — low enough that miscalibration doesn't distort the overall score. The correct fix is a domain-specific word list calibrated on real Claude Code transcripts.
+
+### Alternating long/short responses do not cause false positives
+
+A predicted failure mode: alternating long responses (code writing) and short ones (confirmations) would produce false WARN/CRITICAL on length trend. Tested:
+
+```python
+alternating = [800, 100, 800, 100, 800, 100, 800, 100]
+score_response_length_trend(alternating)
+# → {'score': 100, 'level': 'GOOD', 'change_pct': 0.0}
+```
+
+The early/late window averaging cancels out alternating patterns. The oscillation visible in the session report is caused by the silent tool call issue above, not response rhythm.
+
 ## What is intentionally not in scope
 
 - No extra API calls from hooks (heuristics only — no LLM judge)
