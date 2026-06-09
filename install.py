@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 HOOKS_DIR = Path(__file__).parent / "hooks"
+SKILL_SRC = Path(__file__).parent / ".claude" / "skills" / "devflow-log" / "SKILL.md"
 PYTHON = sys.executable
 
 
@@ -65,6 +66,12 @@ def main() -> None:
         ],
     })
     settings_path.write_text(json.dumps(existing, indent=2))
+
+    if global_install and SKILL_SRC.exists():
+        skill_dst = Path.home() / ".claude" / "skills" / "devflow-log" / "SKILL.md"
+        skill_dst.parent.mkdir(parents=True, exist_ok=True)
+        skill_dst.write_text(SKILL_SRC.read_text())
+        print(f"  Skill /devflow-log installed to: {skill_dst}")
 
     scope = "global (all projects)" if global_install else "project-scoped"
     print(f"DevFlow Monitor installed [{scope}]")
