@@ -38,6 +38,9 @@ After every tool call, a health line appears in the terminal:
 [16:57:32] CRITICAL response length trending down (change=-52%)
 ```
 
+- **turn** — number of tool calls so far in this session
+- **ctx** — context window usage as a bar and percentage of Claude's 200k token limit; at 90%+ Claude starts dropping early context
+
 When you end the session (`/exit` or Ctrl+C), the full report is written automatically:
 
 ```
