@@ -11,6 +11,17 @@ _COLORS = {
 }
 
 
+def _print(text: str) -> None:
+    # Write directly to the terminal device so Claude Code's TUI doesn't swallow the output.
+    # Falls back to stderr if /dev/tty is unavailable (e.g. in tests or non-interactive shells).
+    try:
+        with open("/dev/tty", "w") as tty:
+            tty.write(text + "\n")
+            tty.flush()
+    except Exception:
+        print(text, file=sys.stderr, flush=True)
+
+
 def emit_status(turn: int, input_tokens: int, health: dict, duration_ms: int = 0) -> None:
     ratio = input_tokens / 200_000
     ts = _ts()
@@ -18,11 +29,10 @@ def emit_status(turn: int, input_tokens: int, health: dict, duration_ms: int = 0
     reset = _COLORS["RESET"]
     bar = _bar(ratio)
     dur = f"  {duration_ms:,}ms" if duration_ms else ""
-    print(
+    _print(
         f"[{ts}] turn={turn:3d}  ctx={bar}{ratio:4.0%}  "
         f"tokens={input_tokens:,}{dur}  "
-        f"health={color}{health['level']}({health['score']}){reset}",
-        file=sys.stderr, flush=True,
+        f"health={color}{health['level']}({health['score']}){reset}"
     )
 
 
@@ -31,19 +41,13 @@ def emit(level: str, message: str, detail: str = "") -> None:
     color = _COLORS.get(level, "")
     reset = _COLORS["RESET"]
     suffix = f" ({detail})" if detail else ""
-    print(
-        f"[{ts}] {color}{level:<8}{reset} {message}{suffix}",
-        file=sys.stderr, flush=True,
-    )
+    _print(f"[{ts}] {color}{level:<8}{reset} {message}{suffix}")
 
 
 def emit_report_path(path: str) -> None:
     dim = _COLORS["DIM"]
     reset = _COLORS["RESET"]
-    print(
-        f"[{_ts()}] {'REPORT':<8} {dim}{path}{reset}",
-        file=sys.stderr, flush=True,
-    )
+    _print(f"[{_ts()}] {'REPORT':<8} {dim}{path}{reset}")
 
 
 def _ts() -> str:
