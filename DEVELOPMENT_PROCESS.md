@@ -69,6 +69,14 @@ implementation had gotten wrong by analogy with the API. The corrected `signals.
 transcript file on every hook call, finds the `assistant` entry whose content contains the matching
 `tool_use_id`, and sums all three token buckets to get true context window usage.
 
+**Prompt that triggered the discovery:**
+
+> *"try it out"*
+
+That single prompt — after the installer registered the hooks — is what revealed the bug. Without
+running a live session and inspecting the output, the silently-zero token counts would have been
+invisible indefinitely.
+
 **This is the pattern the requirements are asking about.** The AI wrote plausible code, the code
 ran without errors, and it produced wrong values silently. The bug was only found by running the
 tool against real output and inspecting the data. No amount of unit testing would have caught it
@@ -101,6 +109,13 @@ A separate visualization script (`tests/visualize_scorer.py`) was written to ren
 full response curve in the terminal. The visualization itself caught a second bug:
 
 **Section 4 (Overconfidence) showed GOOD(100) for every row, including "max certainty" cases.**
+
+**Prompt that triggered the discovery:**
+
+> *"python3 tests/visualize_scorer.py"*
+
+Running the visualization was the test. The output showed a flat GOOD(100) column for every
+overconfidence row — which looked wrong on inspection.
 
 The cause: every sample text in the visualization was under 60 characters — the minimum length
 below which the scorer skips analysis to avoid false positives on short acknowledgments. The sample
@@ -188,6 +203,16 @@ where it was expected.
 tool call and discards the stderr of hook subprocesses in the process. The hook output was
 generated and lost before any human could read it.
 
+**Prompts that triggered the discovery:**
+
+> *"where the health line should appear? i am having a session with claude code in the powershell..."*
+
+> *"the entries are there. but i dont see the tool using line"*
+
+The first prompt named the symptom — output was expected but missing. The second confirmed the
+hook was actually running (entries in the log), which narrowed the problem to the output path
+rather than the hook registration or execution.
+
 **How it was found:** The user noticed that events were accumulating in `events.jsonl` — meaning
 the hook ran successfully — but the expected health line (`[HH:MM:SS] turn=...`) never appeared
 in the terminal. The events log proved the hook was not crashing; the output was being swallowed.
@@ -221,6 +246,19 @@ running a session.
 before the session directory existed. The write silently failed with a `FileNotFoundError` caught
 inside the `_print` exception handler, so no log was written.
 
+**Prompt that triggered the discovery:**
+
+> *"ok now we have a health log. how can i see it in real time in my other terminal?"*
+
+Followed by the user running the suggested command and reporting:
+
+```
+$ tail -f ~/devflow-monitor/sessions/.../health.log
+ls: cannot access '/home/danielle/devflow-monitor/sessions/': No such file or directory
+```
+
+The file simply did not exist. The prompt prompted investigation into why the log was never written.
+
 **How it was found:** The user tried `tail -f sessions/<id>/health.log` and got "No such file or
 directory" even after a session had run. Adding a `print` inside the exception handler in `_print`
 confirmed the directory was missing when the first write attempted.
@@ -241,8 +279,9 @@ before any state was saved. The fix moved directory creation to the earliest poi
 
 ## Iteration — Hardcoded Values in Report "What We Can Learn" Section
 
-After the report was working end-to-end, the user asked: *"The 'What We Can Learn' section — are
-the arithmetic examples in the report computed from actual session values or hardcoded?"*
+After the report was working end-to-end, the user asked:
+
+> *"The narrative paragraph — is it templated or does it actually use session data? The 'What We Can Learn' section — are the arithmetic examples in the report computed from actual session values or hardcoded?"*
 
 **The bug:** Code review revealed that three specific values in `_section_learnings` were
 hardcoded to the session used while writing the reporter:
