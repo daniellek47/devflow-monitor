@@ -18,6 +18,9 @@ def main() -> None:
     sid = sig["session_id"]
 
     state = session.load_state(sid)
+    session_path = session.get_session_path(sid)
+    session_path.mkdir(parents=True, exist_ok=True)
+    output.set_log_file(session_path / "health.log")
     state["turn_count"] += 1
     state["tool_total"] += 1
     state["last_input_tokens"] = sig["input_tokens"]

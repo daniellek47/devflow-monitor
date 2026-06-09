@@ -1,8 +1,10 @@
 import json
 from datetime import datetime
 from pathlib import Path
+import shutil
 
 SESSIONS_DIR = Path(__file__).parent.parent / "sessions"
+MAX_SESSIONS = 10
 
 
 def get_session_path(session_id: str) -> Path:
@@ -30,6 +32,15 @@ def append_event(session_id: str, event: dict) -> None:
     path.mkdir(parents=True, exist_ok=True)
     with (path / "events.jsonl").open("a") as f:
         f.write(json.dumps(event) + "\n")
+
+
+def prune_old_sessions(keep: int = MAX_SESSIONS) -> None:
+    if not SESSIONS_DIR.exists():
+        return
+    dirs = sorted(SESSIONS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in dirs[keep:]:
+        if old.is_dir():
+            shutil.rmtree(old)
 
 
 def _initial_state(session_id: str) -> dict:

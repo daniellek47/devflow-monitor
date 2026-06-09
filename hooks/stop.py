@@ -23,6 +23,8 @@ def main() -> None:
     output.emit("GOOD", "session ended — report written")
     output.emit_report_path(str(report_path))
 
+    session.prune_old_sessions()
+
     sys.exit(0)
 
 

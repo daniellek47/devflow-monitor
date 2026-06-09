@@ -1,3 +1,4 @@
+import re
 import sys
 from datetime import datetime
 
@@ -10,6 +11,14 @@ _COLORS = {
     "DIM":      "\033[2m",
 }
 
+_ANSI_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_log_path = None
+
+
+def set_log_file(path) -> None:
+    global _log_path
+    _log_path = path
+
 
 def _print(text: str) -> None:
     # Write directly to the terminal device so Claude Code's TUI doesn't swallow the output.
@@ -20,6 +29,13 @@ def _print(text: str) -> None:
             tty.flush()
     except Exception:
         print(text, file=sys.stderr, flush=True)
+
+    if _log_path:
+        try:
+            with open(_log_path, "a") as f:
+                f.write(_ANSI_RE.sub("", text) + "\n")
+        except Exception:
+            pass
 
 
 def emit_status(turn: int, input_tokens: int, health: dict, duration_ms: int = 0) -> None:
