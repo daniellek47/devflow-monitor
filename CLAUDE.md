@@ -31,7 +31,9 @@ State files:
 | `devflow/reporter.py` | Generates the Markdown report from accumulated state |
 | `hooks/post_tool_use.py` | PostToolUse hook — orchestrates signals → scoring → output → state |
 | `hooks/stop.py` | Stop hook — generates report, prunes old sessions |
-| `install.py` | Registers hooks in Claude Code settings (--global or project-scoped) |
+| `install.py` | Registers hooks in Claude Code settings (--global or project-scoped); also deploys /devflow-log skill |
+| `tail-health` | Opens live tail of sessions/latest/health.log from any directory |
+| `evals/eval_harness.py` | Replays synthetic sessions through scorer.py, compares against golden outputs |
 
 ## Signals and weights
 
@@ -56,9 +58,10 @@ This was a bug in the first implementation — the code assumed tokens were in t
 ```bash
 python3 -m pytest tests/test_scorer.py -v
 python3 tests/visualize_scorer.py   # visual calibration, not pytest
+python3 evals/eval_harness.py       # pipeline eval across 5 synthetic sessions
 ```
 
-54 boundary-case unit tests covering scorer.py only. signals.py and the hooks are untested — they require a live Claude Code session or a real transcript file.
+54 boundary-case unit tests covering scorer.py only. The eval harness replays synthetic sessions through the full scoring pipeline and compares against golden outputs — run it whenever scorer.py changes. signals.py and the hooks are untested — they require a live Claude Code session or a real transcript file.
 
 ## Simulating a hook call
 
@@ -73,7 +76,7 @@ echo '{"session_id":"test","tool_name":"Bash","tool_input":{"command":"ls"},"too
 
 ## Session pruning
 
-`session.MAX_SESSIONS = 10` — old session directories beyond this limit are deleted by the Stop hook. Change this constant to keep more or fewer sessions.
+`session.MAX_SESSIONS = 3` — old session directories beyond this limit are deleted by the Stop hook. Change this constant to keep more or fewer sessions. A `sessions/latest` symlink is maintained by `save_state` and always points to the most recently active session.
 
 ## Anomaly storage format
 
