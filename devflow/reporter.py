@@ -643,13 +643,19 @@ def _section_learnings(state: dict, facts: dict) -> str:
     observations = []
     peak_pct = facts["peak_ctx_pct"]
 
+    first_warn_ts = (
+        signal_history[facts["first_warn_idx"]].get("ts", "")
+        if facts["first_warn_idx"] is not None else ""
+    )
+
     if 0.50 <= peak_pct < 0.75:
+        suffix = f" — as happened here at {first_warn_ts}" if first_warn_ts else ""
         observations.append(
             f"**Context usage peaked at {peak_pct:.0%} — the yellow zone.**  \n"
             f"This is the range where Claude still performs well, but the context score drops from "
             f"GOOD(100) to OK(75). At 35% weight, that alone costs 8.75 points off the health score "
             f"(35 × (1 − 75/100) = 8.75). Combined with any other declining signal, "
-            f"it's enough to push health out of the top band — as happened here at 16:57:32."
+            f"it's enough to push health out of the top band{suffix}."
         )
     elif peak_pct >= 0.75:
         observations.append(
@@ -661,21 +667,49 @@ def _section_learnings(state: dict, facts: dict) -> str:
     if facts["first_critical_idx"] is not None and facts["first_critical_signal"] == "length_trend":
         idx = facts["first_critical_idx"]
         ts = signal_history[idx].get("ts", "")
+        h = signal_history[idx].get("health", {})
+        health_at_critical = h.get("score", 0) if isinstance(h, dict) else int(h)
+        health_level_at_critical = h.get("level", "GOOD") if isinstance(h, dict) else "GOOD"
         observations.append(
-            f"**Response length went CRITICAL ({ts}) while health stayed GOOD(80).**  \n"
+            f"**Response length went CRITICAL ({ts}) while health stayed {health_level_at_critical}({health_at_critical}).**  \n"
             f"This shows the weighted scoring system working as designed. "
             f"Length trend is 25% weight. At score 20 (CRITICAL), it contributes 20×0.25 = 5 points "
             f"to the weighted sum, versus the maximum of 100×0.25 = 25 — a 20-point drag. "
-            f"With all other signals perfect (75 points of remaining capacity), "
-            f"the total was 80 — still GOOD. "
+            f"The other signals held the overall score at {health_at_critical}. "
             f"Only when context pressure was also elevated did the combination push health to WARN."
         )
 
     if anomalies:
+        first = anomalies[0]
+        if isinstance(first, dict) and first.get("type") == "repetition":
+            turn_num = first.get("turn", "?")
+            rep_score = first.get("score", 40)
+        else:
+            import re
+            m = re.search(r"turn (\d+)", str(first))
+            turn_num = int(m.group(1)) if m else "?"
+            rep_score = 40
+
+        health_cost = round((100 - rep_score) * 0.10)
+        # Look up actual health before and at the anomaly turn
+        before_health = after_health = None
+        if isinstance(turn_num, int) and turn_num <= len(signal_history):
+            if turn_num >= 2:
+                h = signal_history[turn_num - 2].get("health", {})
+                before_health = h.get("score") if isinstance(h, dict) else None
+            h = signal_history[turn_num - 1].get("health", {})
+            after_health = h.get("score") if isinstance(h, dict) else None
+
+        drop_text = (
+            f"Health dropped from {before_health} to {after_health}"
+            if before_health is not None and after_health is not None
+            else "Health dipped slightly"
+        )
         observations.append(
-            f"**The repetition anomaly (turn 16) shows the 10% weight doing its job.**  \n"
-            f"A WARN-level repetition (score 40) at 10% weight costs (100−40)×0.10 = 6 points. "
-            f"Health dropped from 100 to 94 — visible in the table, but not alarming. "
+            f"**The repetition anomaly (turn {turn_num}) shows the 10% weight doing its job.**  \n"
+            f"A WARN-level repetition (score {rep_score}) at 10% weight costs "
+            f"(100−{rep_score})×0.10 = {health_cost} points. "
+            f"{drop_text} — visible in the table, but not alarming. "
             f"This is intentional: one repeated command is a flag, not an emergency. "
             f"Three consecutive repeats (score 10, CRITICAL) would cost only 9 points — "
             f"still not a session killer on its own. The signal is designed as a nudge to investigate."
