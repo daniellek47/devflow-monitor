@@ -4,7 +4,7 @@ A passive Claude Code session health monitor. It hooks into every tool call, sco
 
 ---
 
-## Install
+## Quick start (new user)
 
 Clone it anywhere on your machine. It is completely independent of the projects you work on.
 
@@ -16,20 +16,20 @@ python3 install.py --global
 
 That's it. No dependencies. Python 3.8+ only.
 
-`--global` registers the hooks in `~/.claude/settings.json` so every Claude Code session on your machine is monitored automatically.
+`--global` registers the hooks in `~/.claude/settings.json` so every Claude Code session on your machine is monitored automatically, regardless of which project you open.
 
 ---
 
 ## Use
 
-Open a Claude Code session in any project directory:
+Open a Claude Code session in any project directory — devflow-monitor does not need to be anywhere near it:
 
 ```bash
 cd ~/projects/my-app
 claude
 ```
 
-After every tool call, a health line appears in the terminal:
+After every tool call, a health line appears in the Claude Code terminal:
 
 ```
 [16:03:46] turn=  1  ctx=██░░░░░░░░  18%  tokens=36,412  dur=340ms  health=GOOD(100)
@@ -39,7 +39,7 @@ After every tool call, a health line appears in the terminal:
 ```
 
 - **turn** — number of tool calls so far in this session
-- **ctx** — context window usage as a bar and percentage of Claude's 200k token limit; at 90%+ Claude starts dropping early context
+- **ctx** — context window usage as a bar and percentage of the 200k token limit; at 90%+ Claude starts dropping early context
 
 When you end the session (`/exit` or Ctrl+C), the full report is written automatically:
 
@@ -54,6 +54,25 @@ cat ~/devflow-monitor/sessions/<session-id>/report.md
 ```
 
 See [`examples/report_0.md`](examples/report_0.md) for a real session report — includes a narrative overview with verdict and forward recommendation, an annotated health timeline explaining every score change, full anomaly detail with the exact tool input and resolution status, practical guidance per signal, and a "What We Can Learn" section.
+
+---
+
+## Watching health from a second terminal
+
+Health lines also write to a plain-text log file (`health.log`) inside the session directory. Open a second terminal and run:
+
+```bash
+cd ~/devflow-monitor
+tail -f sessions/$(ls -t sessions/ | head -1)/health.log
+```
+
+This follows the most recent session in real time, no ANSI codes, no TUI. Useful when the Claude Code terminal is in another window or when you want to share the stream with someone watching over your shoulder.
+
+To follow a specific session by ID:
+
+```bash
+tail -f ~/devflow-monitor/sessions/<session-id>/health.log
+```
 
 ---
 
@@ -79,15 +98,23 @@ All data is written to `~/devflow-monitor/sessions/`, regardless of which projec
 ~/devflow-monitor/sessions/<session-id>/
 ├── state.json    # live state, updated after every tool call
 ├── events.jsonl  # raw event log, one JSON line per tool call
+├── health.log    # plain-text health lines (tail -f this)
 └── report.md     # full report, written when the session ends
 ```
 
-To watch health lines live from a second terminal (plain text, no ANSI):
+The last 10 sessions are kept. Older ones are deleted automatically when a session ends.
 
-```bash
-cd ~/path/to/devflow-monitor
-tail -f sessions/$(ls -t sessions/ | head -1)/health.log
-```
+---
+
+## Compatibility
+
+**Plans and context window:** The 200k token limit applies to all current Claude plans (Free, Pro, Max, Team, Enterprise) — it is a model property, not a subscription feature. The monitor works identically across plans. If you ever need to adjust the limit (e.g., for a different model), change `MODEL_CONTEXT_LIMIT` in `devflow/scorer.py` line 3.
+
+**Operating system:**
+- **Linux / macOS / WSL2**: fully supported. Health lines write to `/dev/tty` and appear live in the Claude Code terminal.
+- **Windows (native, no WSL)**: health lines fall back to stderr, which Claude Code's TUI discards. The `health.log` file and session report still work — but you won't see live output inside the Claude Code terminal. Use WSL2 for the full experience.
+
+**Python:** 3.8+, standard library only. No pip install needed.
 
 ---
 
@@ -120,10 +147,6 @@ Claude Code calls the hooks as subprocesses after every tool use. There is no ba
 The `PostToolUse` hook receives a JSON payload on stdin containing the tool name, input, response, and a path to the session transcript. Token counts are read from the transcript (not the payload directly), summing three buckets: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. The `Stop` hook fires when the session ends and generates the report from accumulated state.
 
 ---
-
-## Requirements
-
-Python 3.8+, standard library only.
 
 ## Project structure
 
