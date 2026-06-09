@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+DEVELOPMENT_PROCESS.md
+EXECUTIVE_SUMMARY.md
