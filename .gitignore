@@ -5,3 +5,6 @@ __pycache__/
 .pytest_cache/
 .claude/settings.local.json
 evals/results/
+DEVELOPMENT_PROCESS.md
+PRESENTATION.md
+EXECUTIVE_SUMMARY.md

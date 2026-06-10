@@ -132,7 +132,7 @@ def _fmt_fail(name: str, actual: dict, failures: list) -> str:
 
 def main() -> None:
     timestamp = datetime.now().isoformat(timespec="seconds")
-    print(f"\nLucid Eval Harness — {timestamp}")
+    print(f"\nDevFlow Monitor Eval Harness — {timestamp}")
     print(_DIVIDER)
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
