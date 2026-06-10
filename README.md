@@ -1,6 +1,6 @@
 # DevFlow Monitor
 
-A passive session health advisor for Claude Code. It hooks into every tool call, scores five health signals in real time, and — when you're done — prints a digest in your terminal, compares the session with your previous one, and writes a full report. Nothing about how you work changes.
+A passive session health advisor for users on Claude Code sessions. It hooks into every tool call, scores five health signals in real time, and — when you're done — prints a digest in your terminal, compares the session with your previous one, and writes a full report. Nothing about how you work changes.
 
 It is an advisor, not a linter: the goal is to teach you when to trust the AI's output and when to verify it.
 
