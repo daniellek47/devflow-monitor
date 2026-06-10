@@ -18,10 +18,12 @@ def main() -> None:
         sys.exit(0)
 
     session_path = session.get_session_path(sid)
-    report_path = reporter.generate_report(sid, state, session_path)
+    output.set_log_file(session_path / "health.log")
 
-    output.emit("GOOD", "session ended — report written")
-    output.emit_report_path(str(report_path))
+    prev_state = session.load_previous_state(sid)
+    reporter.generate_report(sid, state, session_path, prev_state)
+
+    output.emit_block(reporter.build_digest(state, prev_state))
 
     session.prune_old_sessions()
 

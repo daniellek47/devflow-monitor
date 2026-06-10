@@ -51,6 +51,28 @@ def prune_old_sessions(keep: int = MAX_SESSIONS) -> None:
         shutil.rmtree(old)
 
 
+def load_previous_state(current_session_id: str):
+    """State of the most recently active session other than the current one.
+    Feeds the end-of-session comparison. Returns None when there is no
+    earlier session (first run, or all pruned)."""
+    if not SESSIONS_DIR.exists():
+        return None
+    candidates = [
+        p / "state.json"
+        for p in SESSIONS_DIR.iterdir()
+        if p.is_dir() and not p.is_symlink()
+        and p.name != current_session_id
+        and (p / "state.json").exists()
+    ]
+    if not candidates:
+        return None
+    newest = max(candidates, key=lambda f: f.stat().st_mtime)
+    try:
+        return json.loads(newest.read_text())
+    except Exception:
+        return None
+
+
 def _initial_state(session_id: str) -> dict:
     return {
         "session_id": session_id,

@@ -59,10 +59,10 @@ _REPETITION_GUIDANCE = (
 )
 
 
-def generate_report(session_id: str, state: dict, session_path: Path) -> Path:
+def generate_report(session_id: str, state: dict, session_path: Path, prev_state: dict = None) -> Path:
     events = _load_events(session_path)
     report_path = session_path / "report.md"
-    report_path.write_text(_render(session_id, state, events))
+    report_path.write_text(_render(session_id, state, events, prev_state))
     return report_path
 
 
@@ -80,7 +80,7 @@ def _load_events(session_path: Path) -> list:
     return events
 
 
-def _render(session_id: str, state: dict, events: list = None) -> str:
+def _render(session_id: str, state: dict, events: list = None, prev_state: dict = None) -> str:
     if events is None:
         events = []
     facts = _derive_facts(state)
@@ -89,6 +89,7 @@ def _render(session_id: str, state: dict, events: list = None) -> str:
         _section_overview(state, facts),
         "---\n",
         _section_summary(state, facts),
+        _section_comparison(facts, prev_state),
         _section_health_timeline(state),
         _section_anomaly_detail(state, facts, events),
         _section_recommendations(state, facts),
@@ -120,6 +121,9 @@ def _derive_facts(state: dict) -> dict:
         worst_level = "WARN"
     else:
         worst_level = "GOOD"
+
+    warn_turns = sum(1 for lvl in health_levels if lvl in ("WARN", "CRITICAL"))
+    warn_frac = warn_turns / len(health_levels) if health_levels else 0.0
 
     final_health = (
         signal_history[-1].get("health", {"score": 100, "level": "GOOD"})
@@ -170,6 +174,8 @@ def _derive_facts(state: dict) -> dict:
         "tool_errors": state.get("tool_errors", 0),
         "turn_count": state.get("turn_count", 0),
         "has_anomalies": bool(state.get("anomalies")),
+        "anomaly_count": len(state.get("anomalies", [])),
+        "warn_frac": warn_frac,
     }
 
 
@@ -318,25 +324,181 @@ def _section_summary(state: dict, facts: dict) -> str:
     ])
 
 
+# ── session comparison (feedback loop) ────────────────────────────────────────
+
+def _section_comparison(facts: dict, prev_state: dict) -> str:
+    rows, verdict, prev_label = _comparison_data(facts, prev_state)
+    if rows is None:
+        return ""
+
+    lines = [
+        "## Compared With Your Previous Session",
+        "",
+        f"_Previous session: {prev_label}_",
+        "",
+        "| Metric | Previous | This session | Change |",
+        "|--------|----------|--------------|--------|",
+    ]
+    for label, prev_val, cur_val, change in rows:
+        lines.append(f"| {label} | {prev_val} | {cur_val} | {change} |")
+    lines += ["", verdict, ""]
+    return "\n".join(lines)
+
+
+def _comparison_data(facts: dict, prev_state: dict):
+    """Build (rows, verdict, prev_label) for the session-over-session comparison,
+    or (None, None, None) when there is no usable previous session."""
+    if not prev_state:
+        return None, None, None
+    prev = _derive_facts(prev_state)
+    if not prev["turn_count"]:
+        return None, None, None
+
+    cur_err = facts["tool_errors"] / facts["tool_total"] if facts["tool_total"] else 0.0
+    prev_err = prev["tool_errors"] / prev["tool_total"] if prev["tool_total"] else 0.0
+
+    # (label, prev_str, cur_str, change) — lower is better for every metric here
+    rows = [
+        ("Peak context",
+         f"{prev['peak_ctx_pct']:.0%}", f"{facts['peak_ctx_pct']:.0%}",
+         _change(facts["peak_ctx_pct"], prev["peak_ctx_pct"], tol=0.02)),
+        ("Tool error rate",
+         f"{prev_err:.0%}", f"{cur_err:.0%}",
+         _change(cur_err, prev_err, tol=0.02)),
+        ("Anomalies",
+         str(prev["anomaly_count"]), str(facts["anomaly_count"]),
+         _change(facts["anomaly_count"], prev["anomaly_count"])),
+        ("Turns in WARN/CRITICAL",
+         f"{prev['warn_frac']:.0%}", f"{facts['warn_frac']:.0%}",
+         _change(facts["warn_frac"], prev["warn_frac"], tol=0.02)),
+    ]
+
+    improved = [r[0] for r in rows if "improved" in r[3]]
+    worse = [r[0] for r in rows if "worse" in r[3]]
+    if not improved and not worse:
+        verdict = "Very similar to your previous session — your workflow is consistent."
+    elif improved and not worse:
+        verdict = (
+            f"Better than your previous session on every signal that moved "
+            f"({', '.join(improved).lower()}). Whatever you changed, keep doing it."
+        )
+    elif worse and not improved:
+        verdict = (
+            f"This session ran hotter than your last one — {', '.join(worse).lower()} "
+            f"got worse. Worth a minute to understand why before the next session."
+        )
+    else:
+        verdict = (
+            f"Mixed: {', '.join(improved).lower()} improved, "
+            f"while {', '.join(worse).lower()} got worse."
+        )
+
+    prev_id = str(prev_state.get("session_id", "unknown"))
+    prev_started = str(prev_state.get("started_at", ""))[:16].replace("T", " ")
+    prev_label = f"`{prev_id[:8]}` ({prev_started}, {prev['turn_count']} turns)"
+    return rows, verdict, prev_label
+
+
+def _change(cur, prev, tol=0) -> str:
+    if abs(cur - prev) <= tol:
+        return "≈ same"
+    return "▼ improved" if cur < prev else "▲ worse"
+
+
+# ── end-of-session digest ─────────────────────────────────────────────────────
+
+def build_digest(state: dict, prev_state: dict = None) -> list:
+    """Short plain-text digest printed to the terminal when the session ends.
+    The goal: the engineer reflects without opening any file."""
+    facts = _derive_facts(state)
+    fh = facts["final_health"]
+    rule = "─" * 58
+
+    err_pct = (
+        f" ({facts['tool_errors']/facts['tool_total']:.0%})"
+        if facts["tool_total"] and facts["tool_errors"] else ""
+    )
+    lines = [
+        rule,
+        " DevFlow Monitor — Session Digest",
+        f" Health:    {fh.get('level', 'GOOD')}({fh.get('score', 100)}) final · "
+        f"{facts['turn_count']} turns · "
+        f"{facts['tool_errors']} error{'' if facts['tool_errors'] == 1 else 's'}{err_pct}",
+        f" Context:   peaked {facts['peak_ctx_pct']:.0%} ({facts['peak_ctx']:,} tokens) · "
+        f"ended {facts['final_ctx_pct']:.0%}",
+        f" Anomalies: {_digest_anomaly_summary(state)}",
+        f" Takeaway:  {_digest_takeaway(facts, state)}",
+    ]
+
+    rows, _, _ = _comparison_data(facts, prev_state)
+    if rows:
+        parts = [f"{label.lower()} {p}→{c}" for label, p, c, _ in rows[:3]]
+        lines.append(f" Last time: {' · '.join(parts)}")
+
+    lines += [
+        " Report:    ./show-report   (sessions/latest/report.md)",
+        rule,
+    ]
+    return lines
+
+
+def _digest_anomaly_summary(state: dict) -> str:
+    anomalies = state.get("anomalies", [])
+    if not anomalies:
+        return "none"
+    by_type = {}
+    for a in anomalies:
+        atype = a.get("type", "other") if isinstance(a, dict) else "other"
+        by_type[atype] = by_type.get(atype, 0) + 1
+    detail = ", ".join(f"{t} ×{n}" for t, n in by_type.items())
+    first = anomalies[0]
+    turn = f" — first at turn {first.get('turn')}" if isinstance(first, dict) and first.get("turn") else ""
+    return f"{len(anomalies)} ({detail}){turn}"
+
+
+def _digest_takeaway(facts: dict, state: dict) -> str:
+    """One line the engineer should remember. Priority: act-now items first,
+    then reflection items, then the all-clear."""
+    err_rate = facts["tool_errors"] / facts["tool_total"] if facts["tool_total"] else 0.0
+
+    if facts["final_ctx_pct"] >= 0.75:
+        return "context is nearly full — run /compact or start fresh before continuing this work"
+    if err_rate >= 0.20:
+        return f"{facts['tool_errors']} of {facts['tool_total']} tool calls failed — re-check those results before trusting them"
+    if facts["final_health"].get("level") in ("WARN", "CRITICAL"):
+        return "session ended below GOOD — skim the report before reusing this session's output"
+    if facts["peak_ctx_pct"] >= 0.75:
+        return "context was the limiting factor — next time /compact earlier, before quality is at risk"
+    if facts["worst_level"] in ("WARN", "CRITICAL"):
+        return "health dipped mid-session and self-corrected — a task shift, not degradation"
+    if facts["has_anomalies"]:
+        first = state.get("anomalies", [{}])[0]
+        turn = first.get("turn", "?") if isinstance(first, dict) else "?"
+        atype = first.get("type", "") if isinstance(first, dict) else ""
+        hint = {
+            "repetition": "a retry, or a stuck loop?",
+            "tool_error": "one-off failure, or a wrong assumption?",
+            "overconfidence": "were the confident claims actually right?",
+        }.get(atype, "see the report for context")
+        return f"one flag worth a look: {atype or 'anomaly'} at turn {turn} ({hint})"
+    return "clean session — nothing to flag"
+
+
 def _section_health_timeline(state: dict) -> str:
     history = state.get("signal_history", [])
     if not history:
         return "## Health Over Time\n\n_No signal history recorded._\n"
 
-    lines = [
-        "## Health Over Time",
-        "",
-        "_Scores 0–100. GOOD ≥ 80 · WARN 55–79 · CRITICAL < 55. "
-        "Signal weights: Context 35%, Trend 25%, Errors 20%, Confidence 10%, Repetition 10%._",
-        "",
-        "| Time | Health | Context | Trend | Errors | Notes |",
-        "|------|--------|---------|-------|--------|-------|",
-    ]
+    # Show level label only when not GOOD
+    def cell(score, key):
+        lvl = _score_level(score, key)
+        return f"{score}" if lvl == "GOOD" else f"{score} ({lvl})"
 
     prev_ctx = 100
     prev_lt = 100
     prev_rep = 100
     prev_health_level = "GOOD"
+    rows = []
 
     for entry in history:
         ts = entry.get("ts", "")
@@ -350,11 +512,6 @@ def _section_health_timeline(state: dict) -> str:
         health_score = h.get("score", 100) if isinstance(h, dict) else int(h)
         health_level = h.get("level", "GOOD") if isinstance(h, dict) else "GOOD"
 
-        # Show level label only when not GOOD
-        def cell(score, key):
-            lvl = _score_level(score, key)
-            return f"{score}" if lvl == "GOOD" else f"{score} ({lvl})"
-
         note = _timeline_note(
             ctx_score, lt_score, err_score, rep_score,
             prev_ctx, prev_lt, prev_rep, health_level, prev_health_level
@@ -362,13 +519,50 @@ def _section_health_timeline(state: dict) -> str:
 
         prev_ctx, prev_lt, prev_rep, prev_health_level = ctx_score, lt_score, rep_score, health_level
 
-        lines.append(
+        row = (
             f"| {ts} | **{health_level}**({health_score}) "
             f"| {cell(ctx_score, 'context')} "
             f"| {cell(lt_score, 'length_trend')} "
             f"| {cell(err_score, 'error_rate')} "
             f"| {note} |"
         )
+        rows.append((row, bool(note)))
+
+    # Keep the first row, the last row, and every row where something changed.
+    # Runs of steady rows collapse into a single ⋯ marker so the table reads
+    # as a story of transitions, not a raw log.
+    keep = [
+        i for i, (_, has_note) in enumerate(rows)
+        if i == 0 or i == len(rows) - 1 or has_note
+    ]
+    omitted = len(rows) - len(keep)
+
+    caption = (
+        "_Scores 0–100. GOOD ≥ 80 · WARN 55–79 · CRITICAL < 55. "
+        "Signal weights: Context 35%, Trend 25%, Errors 20%, Confidence 10%, Repetition 10%._"
+    )
+    if omitted:
+        caption += (
+            f"\n\n_Showing transitions only — {omitted} steady "
+            f"turn{'s are' if omitted > 1 else ' is'} collapsed into ⋯ rows._"
+        )
+
+    lines = [
+        "## Health Over Time",
+        "",
+        caption,
+        "",
+        "| Time | Health | Context | Trend | Errors | Notes |",
+        "|------|--------|---------|-------|--------|-------|",
+    ]
+
+    last_kept = None
+    for i in keep:
+        if last_kept is not None and i > last_kept + 1:
+            skipped = i - last_kept - 1
+            lines.append(f"| ⋯ | | | | | _{skipped} steady turn{'s' if skipped > 1 else ''}_ |")
+        lines.append(rows[i][0])
+        last_kept = i
 
     lines += [""]
     return "\n".join(lines)

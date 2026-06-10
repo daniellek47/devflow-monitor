@@ -60,6 +60,13 @@ def emit(level: str, message: str, detail: str = "") -> None:
     _print(f"[{ts}] {color}{level:<8}{reset} {message}{suffix}")
 
 
+def emit_block(lines) -> None:
+    """Emit a multi-line block verbatim (used for the end-of-session digest).
+    Goes through _print so it reaches both /dev/tty and health.log."""
+    for line in lines:
+        _print(line)
+
+
 def emit_report_path(path: str) -> None:
     dim = _COLORS["DIM"]
     reset = _COLORS["RESET"]
