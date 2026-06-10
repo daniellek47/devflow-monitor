@@ -2,9 +2,11 @@
 
 **Danielle Kreiner** · June 2026
 **GitHub:** [github.com/daniellek47/devflow-monitor](https://github.com/daniellek47/devflow-monitor)
-**Demo:** _\<link to recording — added after recording\>_
+**Demo:** [https://www.loom.com/share/b6ced8ce8a084edd9540415527feceef](https://www.loom.com/share/b6ced8ce8a084edd9540415527feceef)
 
 ---
+# The document's purpose is to document the project, development, testing, and evaluation, and engineering decisions.
+# It extends the PDF report submitted by email.
 
 # 1. Executive Summary
 
