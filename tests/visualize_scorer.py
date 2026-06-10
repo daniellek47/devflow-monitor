@@ -80,6 +80,13 @@ trend_cases = [
     ("Old bad, recent stable",       [50]*5 + [50]*5 + [200]*5),
     ("Zero early avg  (no crash)",   [0]*5   + [100]*5),
     ("Over limit only last 10 seen", [1]*50  + [500]*5 + [500]*5),
+    # Finding 1: silent tool calls collapse the late window. The scorer is
+    # correct by design — the fix is upstream (post_tool_use.py filters
+    # empty-text turns out of the window before they reach this function).
+    ("Silent-call burst (Finding 1)", [700, 720, 680, 710, 700, 50, 60, 45, 55, 50]),
+    # Finding 3: alternating long/short was predicted to false-positive.
+    # It doesn't — both window halves average to the same value.
+    ("Alternating (hypothesis rejected)", [800, 100] * 4),
 ]
 
 for label, history in trend_cases:
@@ -132,6 +139,10 @@ conf_cases = [
      "max hedging — all hedge words"),
     ("Definitely the right call, though I think we should probably verify. Certainly worth checking.",
      "mixed: certainty + hedging"),
+    # Finding 2: actual Claude Code engineering prose carries no certainty
+    # words at all — this is why the signal is dormant in this domain.
+    ("I'll create the file at the specified path with the correct structure and update the scorer.",
+     "real Claude Code prose (Finding 2)"),
 ]
 
 for text, label in conf_cases:
@@ -158,6 +169,10 @@ rep_cases = [
     ("Different input — no flag",    [mk(cmd="pwd")]*3,           mk(cmd="ls")),
     ("Different tool — no flag",     [mk("Read")]*3,              mk("Bash")),
     ("10 matches outside window",    [mk()]*10 + [mk("Read")]*6,  mk()),
+    # Known limitation: the fingerprint truncates input at 120 chars, so long
+    # commands that differ only after that point are counted as identical.
+    ("Fingerprint collision (>120 chars)",
+                                     [mk(cmd="x"*150 + "BBB")]*2, mk(cmd="x"*150 + "AAA")),
 ]
 
 for label, history, new_call in rep_cases:
@@ -190,6 +205,12 @@ health_cases = [
     ("All signals at WARN (score=40)",  scores_from(**{k: 40 for k in
                                             ("context","length_trend","error_rate","overconfidence","repetition")})),
     ("All signals at 60",               scores_from(**{k: 60 for k in
+                                            ("context","length_trend","error_rate","overconfidence","repetition")})),
+    # The WARN/CRITICAL action boundary — the eval harness's silent_failures
+    # case (score 50 → start_fresh) depends on exactly this line.
+    ("All at 55 (WARN boundary)",       scores_from(**{k: 55 for k in
+                                            ("context","length_trend","error_rate","overconfidence","repetition")})),
+    ("All at 54 (CRITICAL boundary)",   scores_from(**{k: 54 for k in
                                             ("context","length_trend","error_rate","overconfidence","repetition")})),
 ]
 
