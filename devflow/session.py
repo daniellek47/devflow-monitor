@@ -41,10 +41,14 @@ def append_event(session_id: str, event: dict) -> None:
 def prune_old_sessions(keep: int = MAX_SESSIONS) -> None:
     if not SESSIONS_DIR.exists():
         return
-    dirs = sorted(SESSIONS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+    # Skip the "latest" symlink — rmtree on a symlink raises and would crash the Stop hook
+    dirs = sorted(
+        (p for p in SESSIONS_DIR.iterdir() if p.is_dir() and not p.is_symlink()),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     for old in dirs[keep:]:
-        if old.is_dir():
-            shutil.rmtree(old)
+        shutil.rmtree(old)
 
 
 def _initial_state(session_id: str) -> dict:
