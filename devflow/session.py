@@ -51,10 +51,16 @@ def prune_old_sessions(keep: int = MAX_SESSIONS) -> None:
         shutil.rmtree(old)
 
 
+# Sessions shorter than this are skipped as comparison baselines — a quick
+# restart or one-question session would make the next comparison meaningless.
+MIN_COMPARISON_TURNS = 5
+
+
 def load_previous_state(current_session_id: str):
-    """State of the most recently active session other than the current one.
-    Feeds the end-of-session comparison. Returns None when there is no
-    earlier session (first run, or all pruned)."""
+    """State of the most recently active session other than the current one
+    that has enough turns to be a meaningful comparison baseline.
+    Feeds the end-of-session comparison. Returns None when no qualifying
+    session exists (first run, all pruned, or only trivial sessions)."""
     if not SESSIONS_DIR.exists():
         return None
     candidates = [
@@ -64,13 +70,14 @@ def load_previous_state(current_session_id: str):
         and p.name != current_session_id
         and (p / "state.json").exists()
     ]
-    if not candidates:
-        return None
-    newest = max(candidates, key=lambda f: f.stat().st_mtime)
-    try:
-        return json.loads(newest.read_text())
-    except Exception:
-        return None
+    for f in sorted(candidates, key=lambda f: f.stat().st_mtime, reverse=True):
+        try:
+            state = json.loads(f.read_text())
+        except Exception:
+            continue
+        if state.get("turn_count", 0) >= MIN_COMPARISON_TURNS:
+            return state
+    return None
 
 
 def _initial_state(session_id: str) -> dict:

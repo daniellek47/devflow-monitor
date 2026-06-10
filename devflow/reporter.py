@@ -436,10 +436,21 @@ def build_digest(state: dict, prev_state: dict = None) -> list:
         lines.append(f" Last time: {' · '.join(parts)}")
 
     lines += [
-        " Report:    ./show-report   (sessions/latest/report.md)",
+        f" Report:    {_show_report_path()}",
         rule,
     ]
     return lines
+
+
+def _show_report_path() -> str:
+    """Absolute path to the show-report script, shortened with ~ when possible.
+    The digest can appear in any project directory, so a ./-relative hint
+    would only work from the devflow-monitor root."""
+    script = Path(__file__).resolve().parent.parent / "show-report"
+    try:
+        return "~/" + str(script.relative_to(Path.home()))
+    except ValueError:
+        return str(script)
 
 
 def _digest_anomaly_summary(state: dict) -> str:

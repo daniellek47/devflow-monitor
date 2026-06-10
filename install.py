@@ -51,6 +51,8 @@ def main() -> None:
         hooks.pop("SessionEnd", None)
         existing["hooks"] = hooks
         settings_path.write_text(json.dumps(existing, indent=2))
+        if global_install:
+            _remove_command_links()
         print(f"Hooks removed from {settings_path}")
         return
 
@@ -80,10 +82,38 @@ def main() -> None:
         skill_dst.write_text(SKILL_SRC.read_text())
         print(f"  Skill /devflow-log installed to: {skill_dst}")
 
+    if global_install:
+        _create_command_links()
+
     scope = "global (all projects)" if global_install else "project-scoped"
     print(f"DevFlow Monitor installed [{scope}]")
     print(f"  Settings: {settings_path}")
     print(f"  Reports will be written to: {Path(__file__).parent / 'sessions'}")
+
+
+COMMANDS = ("show-report", "tail-health")
+BIN_DIR = Path.home() / ".local" / "bin"
+
+
+def _create_command_links() -> None:
+    """Symlink the CLI scripts into ~/.local/bin so they work from any
+    directory (the digest and docs refer to them by bare name)."""
+    BIN_DIR.mkdir(parents=True, exist_ok=True)
+    for name in COMMANDS:
+        src = Path(__file__).parent / name
+        dst = BIN_DIR / name
+        if dst.is_symlink() or dst.exists():
+            dst.unlink()
+        dst.symlink_to(src)
+        print(f"  Command linked: {dst} -> {src}")
+
+
+def _remove_command_links() -> None:
+    for name in COMMANDS:
+        dst = BIN_DIR / name
+        if dst.is_symlink():
+            dst.unlink()
+            print(f"  Command removed: {dst}")
 
 
 if __name__ == "__main__":

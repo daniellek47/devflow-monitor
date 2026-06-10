@@ -1,6 +1,7 @@
 #!/bin/bash
 # Open the most recent DevFlow Monitor session report from any directory.
-DEVFLOW_DIR="$(cd "$(dirname "$0")" && pwd)"
+# readlink -f resolves the ~/.local/bin symlink back to the repo location.
+DEVFLOW_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 REPORT="$DEVFLOW_DIR/sessions/latest/report.md"
 
 if [ ! -e "$REPORT" ]; then

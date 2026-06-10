@@ -1,5 +1,6 @@
 #!/bin/bash
-DEVFLOW_DIR="$(cd "$(dirname "$0")" && pwd)"
+# readlink -f resolves the ~/.local/bin symlink back to the repo location.
+DEVFLOW_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 LOG="$DEVFLOW_DIR/sessions/latest/health.log"
 MARKER="$DEVFLOW_DIR/sessions/.intro_shown"
 
@@ -25,19 +26,19 @@ is to teach you when to trust the AI's output and when to verify.
 What you get
   · live health lines below, one per tool call
   · a digest in your session terminal when the session ends
-  · a full report: ./show-report  — including a comparison
+  · a full report: show-report  — including a comparison
     with your previous session, so you can see what changed
 
 Commands
   /devflow-log     open this live view from any Claude Code session
-  ./show-report    read the latest session report
+  show-report      read the latest session report
 EOF
 }
 
 print_short_intro() {
 cat <<'EOF'
 ── DevFlow Monitor · live health log ──────────────────────────
-   5 signals · GOOD ≥80 · WARN 55–79 · CRIT <55 · report: ./show-report
+   5 signals · GOOD ≥80 · WARN 55–79 · CRIT <55 · report: show-report
 EOF
 }
 
