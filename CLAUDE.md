@@ -111,11 +111,23 @@ Anomalies are stored as structured dicts (since the educational report update):
 ```
 The reporter handles legacy string anomalies (from before this change) by reading `events.jsonl` to enrich them with tool input.
 
+## Assignment context and current status (June 2026)
+
+This project is the submission for an AI engineering assignment, evaluated by a panel on problem framing, directing/iterating on AI output, verifying rather than trusting, and engineering judgment.
+
+- **`REPORT.md` is the single submission document** (rendered to PDF: `pandoc REPORT.md -o report.pdf -V geometry:margin=2cm` — check the ASCII diagram and wide tables fit). It supersedes `DEVELOPMENT_PROCESS.md`, `EXECUTIVE_SUMMARY.md`, and `PRESENTATION.md`, which are kept for history only — they contain stale claims (e.g., Finding 1 described as unfixed). Edit REPORT.md, never those three.
+- Remaining before submission: record the demo, fill the two demo-link placeholders in REPORT.md (header and §5), render the PDF.
+- `examples/report_0.md` predates the silent-tool-call filter — its oscillating length-trend CRITICALs are intentional evidence for REPORT.md §3.2, not a bug to fix.
+
 ## Known limitations
 
 ### Overconfidence scorer is inactive in code-writing context
 
 The overconfidence scorer returned GOOD(100) on every turn of a real 89-turn session. Claude Code's language is assertive by nature — it writes code and explains decisions without hedging. Words like "definitely" and "obviously" are rare in engineering output. The certainty word list was calibrated for conversational text. Weight kept at 10% intentionally — low enough that miscalibration doesn't distort the overall score. The correct fix is a domain-specific word list calibrated on real Claude Code transcripts.
+
+### Overconfidence DOES fire in conversation-heavy sessions (open observation)
+
+Finding 2 (signal dormant in code-writing context) is only half the story. A discussion-heavy session on 2026-06-10 (evaluation/planning prose rather than code) produced 8 overconfidence WARNs, all with certainty_ratio=1.0. Not yet investigated: whether these are genuine certainty-heavy prose (which would nuance Finding 2 to "dormant in code-writing turns, active in discussion turns") or an artifact (e.g., short text passing the 60-char guard with a single certainty word and zero hedges → ratio 1.0). Check `_score_text_once` in post_tool_use.py and the word lists in scorer.py before drawing conclusions.
 
 ### Repetition fingerprint truncates at 120 chars
 
