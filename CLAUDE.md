@@ -34,7 +34,7 @@ State files:
 | `hooks/post_tool_use.py` | PostToolUse hook — orchestrates signals → scoring → output → state |
 | `hooks/stop.py` | Stop hook — fires after every Claude response; silently refreshes the report so show-report is always current |
 | `hooks/session_end.py` | SessionEnd hook — fires on actual session termination; generates final report, prints the digest, prunes |
-| `install.py` | Registers hooks in Claude Code settings (--global or project-scoped); also deploys /devflow-log skill |
+| `install.py` | Registers hooks in Claude Code settings (--global or project-scoped); deploys /devflow-log skill; on --global also symlinks show-report and tail-health into ~/.local/bin |
 | `tail-health` | Live tail of sessions/latest/health.log; prints the signals intro banner first (full on first run, compact after — marker: `sessions/.intro_shown`) |
 | `show-report` | Opens sessions/latest/report.md from any directory (glow if available, else $PAGER) |
 | `evals/eval_harness.py` | Replays synthetic sessions through scorer.py, compares against golden outputs |
@@ -91,7 +91,7 @@ Warning: the Stop hook prunes real session directories (MAX_SESSIONS=3). Back up
 ## End-of-session digest and comparison
 
 When the session actually terminates, `session_end.py`:
-1. Loads the previous session's state via `session.load_previous_state(sid)` — the most recently active session directory other than the current one (by state.json mtime)
+1. Loads the previous session's state via `session.load_previous_state(sid)` — the most recently active session directory other than the current one (by state.json mtime) that has at least `session.MIN_COMPARISON_TURNS` (5) turns; trivial sessions are skipped as baselines
 2. Generates `report.md`, including a "Compared With Your Previous Session" table (peak context, error rate, anomalies, turns in WARN/CRITICAL — lower is better for all four) with a one-sentence verdict
 3. Prints an 8-line digest via `reporter.build_digest` to /dev/tty and health.log: final health, peak context, anomaly summary, a one-line takeaway, the comparison, and the report path
 

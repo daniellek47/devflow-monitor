@@ -322,6 +322,14 @@ discovered in the process: `show-report` is always current mid-session. A new `S
 (actual termination: `/exit`, Ctrl+C, `/clear`) generates the final report and prints the digest —
 once. Verified by simulating both hooks: Stop produces no output, SessionEnd prints the digest.
 
+**First real user test, three paper cuts.** Using the tool from a *different* project directory —
+the actual deployment scenario — immediately surfaced three issues no amount of testing from the
+repo root would have found: the digest's `./show-report` hint only works from the repo root
+(fixed: the digest now prints the absolute path); a 1-turn restart session became the comparison
+baseline, rendering the comparison meaningless (fixed: sessions under 5 turns are skipped as
+baselines); and the new `~/.local/bin` command symlinks broke the scripts' self-location (fixed:
+`readlink -f`). The lesson generalizes: test from the user's directory, not the developer's.
+
 ---
 
 # 3. Critical Reflection — Evaluating and Improving the AI's Output

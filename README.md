@@ -18,7 +18,7 @@ python3 install.py --global
 
 That's it. No dependencies. Python 3.8+ only.
 
-`--global` registers the hooks in `~/.claude/settings.json` so every Claude Code session on your machine is monitored automatically, regardless of which project you open. It also installs the `/devflow-log` skill globally so you can open a live log window from any session.
+`--global` registers the hooks in `~/.claude/settings.json` so every Claude Code session on your machine is monitored automatically, regardless of which project you open. It also installs the `/devflow-log` skill globally, and links the `show-report` and `tail-health` commands into `~/.local/bin` so they work by name from any directory.
 
 ---
 
@@ -53,7 +53,7 @@ When you end the session (`/exit` or Ctrl+C), a digest prints right in your term
  Anomalies: 1 (repetition ×1) — first at turn 16
  Takeaway:  context was the limiting factor — next time /compact earlier
  Last time: peak context 62%→82% · tool error rate 0%→0% · anomalies 5→1
- Report:    ./show-report   (sessions/latest/report.md)
+ Report:    ~/devflow-monitor/show-report
 ──────────────────────────────────────────────────────────
 ```
 
@@ -62,7 +62,7 @@ The `Last time` line compares this session with your previous one — the feedba
 To read the full report:
 
 ```bash
-~/devflow-monitor/show-report
+show-report
 ```
 
 The report includes a narrative overview with verdict and forward recommendation, a comparison table against your previous session, a transitions-only health timeline (steady turns are collapsed, so it reads as a story, not a log), full anomaly detail with the exact tool input and resolution status, and a "What We Can Learn" section. See [`examples/report_0.md`](examples/report_0.md) for a real session report.
@@ -127,7 +127,7 @@ All data is written to `~/devflow-monitor/sessions/`, regardless of which projec
 └── report.md     # full report, written when the session ends
 ```
 
-The last 3 sessions are kept; older ones are deleted automatically when a session ends. The most recent previous session is what the digest and report compare against, so the feedback loop always has data after your first session.
+The last 3 sessions are kept; older ones are deleted automatically when a session ends. The digest and report compare against the most recent previous session **with at least 5 turns** — so a quick restart or one-question session doesn't become the baseline and make the comparison meaningless. Sessions from any project count: the store is global, and so is the feedback loop.
 
 ---
 
