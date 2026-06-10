@@ -1,0 +1,14 @@
+#!/bin/bash
+# Open the most recent DevFlow Monitor session report from any directory.
+DEVFLOW_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPORT="$DEVFLOW_DIR/sessions/latest/report.md"
+
+if [ ! -e "$REPORT" ]; then
+    echo "No report yet — one is generated automatically when a monitored session ends." >&2
+    exit 1
+fi
+
+if command -v glow &>/dev/null; then
+    exec glow -p "$REPORT"
+fi
+exec "${PAGER:-less}" "$REPORT"

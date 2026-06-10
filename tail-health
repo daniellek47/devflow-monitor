@@ -1,6 +1,53 @@
 #!/bin/bash
 DEVFLOW_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG="$DEVFLOW_DIR/sessions/latest/health.log"
+MARKER="$DEVFLOW_DIR/sessions/.intro_shown"
+
+print_full_intro() {
+cat <<'EOF'
+╭─────────────────────────────────────────────────────────────╮
+│  DevFlow Monitor — a session health advisor for Claude Code │
+╰─────────────────────────────────────────────────────────────╯
+It passively watches your session and scores five signals after
+every tool call. It changes nothing about how you work — its job
+is to teach you when to trust the AI's output and when to verify.
+
+  Signal           Weight   Flags when…
+  ──────────────   ──────   ─────────────────────────────────────
+  context          35%      window above 50% (WARN 75%, CRIT 90%)
+  length trend     25%      responses shrink >25% / >50% over 10 turns
+  error rate       20%      tool failures above 10% / 40%
+  overconfidence   10%      certainty words crowd out hedging
+  repetition       10%      same call 2–3× within 6 calls
+
+  Overall health:  GOOD ≥ 80 · WARN 55–79 · CRITICAL < 55
+
+What you get
+  · live health lines below, one per tool call
+  · a digest in your session terminal when the session ends
+  · a full report: ./show-report  — including a comparison
+    with your previous session, so you can see what changed
+
+Commands
+  /devflow-log     open this live view from any Claude Code session
+  ./show-report    read the latest session report
+EOF
+}
+
+print_short_intro() {
+cat <<'EOF'
+── DevFlow Monitor · live health log ──────────────────────────
+   5 signals · GOOD ≥80 · WARN 55–79 · CRIT <55 · report: ./show-report
+EOF
+}
+
+if [ ! -e "$MARKER" ]; then
+    print_full_intro
+    mkdir -p "$DEVFLOW_DIR/sessions" && touch "$MARKER"
+else
+    print_short_intro
+fi
+echo
 
 if [ ! -e "$LOG" ]; then
     echo "Waiting for a session to start..." >&2
