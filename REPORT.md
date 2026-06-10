@@ -298,6 +298,30 @@ crashed once enough sessions accumulated. The comparison feature depends on prun
 the bug became visible the moment the code around it was read with intent. Fixed by excluding
 symlinks from the prune list.
 
+### Iteration 8 — Stop does not mean session end
+
+**Symptom:** The new digest appeared in `health.log` every few minutes during a live session —
+one digest reporting "72 turns," then turns 73–77 of ordinary work, then another digest reporting
+"77 turns."
+
+**Prompt that triggered discovery:** *"why session digest once every few minutes?"*
+
+**Root cause:** Claude Code's `Stop` hook event fires **every time Claude finishes responding to
+a prompt** — not when the session ends. The entire project had been built on the wrong reading of
+the event name. The mistake was invisible for the project's whole life because the old Stop output
+was a single dim line; the 9-line digest made the actual firing frequency impossible to miss.
+
+This is the same bug class as the token-counting bug: a plausible assumption about an external
+system's semantics ("an event called Stop fires when the session stops") that reality disagrees
+with — and like that bug, it was caught not by tests but by a human watching real output and
+asking why it looked wrong.
+
+**Fix:** Split the lifecycle across the two events Claude Code actually provides. `Stop` now
+silently refreshes the report after every response — a hidden benefit of the original mistake,
+discovered in the process: `show-report` is always current mid-session. A new `SessionEnd` hook
+(actual termination: `/exit`, Ctrl+C, `/clear`) generates the final report and prints the digest —
+once. Verified by simulating both hooks: Stop produces no output, SessionEnd prints the digest.
+
 ---
 
 # 3. Critical Reflection — Evaluating and Improving the AI's Output

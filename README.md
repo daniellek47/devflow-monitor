@@ -67,6 +67,8 @@ To read the full report:
 
 The report includes a narrative overview with verdict and forward recommendation, a comparison table against your previous session, a transitions-only health timeline (steady turns are collapsed, so it reads as a story, not a log), full anomaly detail with the exact tool input and resolution status, and a "What We Can Learn" section. See [`examples/report_0.md`](examples/report_0.md) for a real session report.
 
+The report is also refreshed silently after every Claude response, so `show-report` works mid-session too — you don't have to wait for the end to check how things are going.
+
 ---
 
 ## Watching health from a second terminal
@@ -167,7 +169,9 @@ This writes the hooks into `.claude/settings.json` in that project directory onl
 
 Claude Code calls the hooks as subprocesses after every tool use. There is no background daemon — each invocation is an isolated Python process that runs for under a second.
 
-The `PostToolUse` hook receives a JSON payload on stdin containing the tool name, input, response, and a path to the session transcript. Token counts are read from the transcript (not the payload directly), summing three buckets: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. The `Stop` hook fires when the session ends: it loads the previous session's state for comparison, generates the report, and prints the digest to the terminal.
+The `PostToolUse` hook receives a JSON payload on stdin containing the tool name, input, response, and a path to the session transcript. Token counts are read from the transcript (not the payload directly), summing three buckets: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`.
+
+Two more hooks handle the session lifecycle — and the distinction matters: `Stop` fires every time Claude finishes responding to a prompt (not at session end), so it silently refreshes the report to keep it current. `SessionEnd` fires on actual termination (`/exit`, Ctrl+C, `/clear`) and prints the digest — once.
 
 ---
 
@@ -183,7 +187,8 @@ devflow-monitor/
 │   └── reporter.py      # Markdown report, end-of-session digest, session comparison
 ├── hooks/
 │   ├── post_tool_use.py # PostToolUse hook — runs after every tool call
-│   └── stop.py          # Stop hook — prints the digest, generates the report
+│   ├── stop.py          # Stop hook — refreshes the report after every response
+│   └── session_end.py   # SessionEnd hook — prints the digest at actual session end
 ├── .claude/
 │   └── skills/
 │       └── devflow-log/ # /devflow-log skill (deployed globally by install.py --global)

@@ -2,7 +2,9 @@
 
 ## What this project is
 
-A passive session health advisor for Claude Code — an educational tool, not a linter. It hooks into Claude Code's PostToolUse and Stop events, scores five health signals on every tool call, writes health lines to the terminal, and at session end prints a short digest (with a comparison against the previous session) and generates a Markdown report.
+A passive session health advisor for Claude Code — an educational tool, not a linter. It hooks into Claude Code's PostToolUse, Stop, and SessionEnd events, scores five health signals on every tool call, writes health lines to the terminal, and at session end prints a short digest (with a comparison against the previous session) and generates a Markdown report.
+
+Hook event semantics matter here: **Stop fires every time Claude finishes responding to a prompt, NOT at session end.** SessionEnd fires on actual termination (/exit, Ctrl+C, /clear). Getting this wrong originally made the digest print after every response.
 
 This project monitors its own Claude Code sessions — the hooks are installed and active here.
 
@@ -30,7 +32,8 @@ State files:
 | `devflow/output.py` | Writes to /dev/tty (not stderr) so Claude Code TUI doesn't swallow output; also writes to health.log |
 | `devflow/reporter.py` | Markdown report, end-of-session digest (`build_digest`), session-over-session comparison |
 | `hooks/post_tool_use.py` | PostToolUse hook — orchestrates signals → scoring → output → state |
-| `hooks/stop.py` | Stop hook — prints digest, generates report (with comparison), prunes old sessions |
+| `hooks/stop.py` | Stop hook — fires after every Claude response; silently refreshes the report so show-report is always current |
+| `hooks/session_end.py` | SessionEnd hook — fires on actual session termination; generates final report, prints the digest, prunes |
 | `install.py` | Registers hooks in Claude Code settings (--global or project-scoped); also deploys /devflow-log skill |
 | `tail-health` | Live tail of sessions/latest/health.log; prints the signals intro banner first (full on first run, compact after — marker: `sessions/.intro_shown`) |
 | `show-report` | Opens sessions/latest/report.md from any directory (glow if available, else $PAGER) |
@@ -72,8 +75,11 @@ python3 evals/eval_harness.py       # pipeline eval across 5 synthetic sessions
 echo '{"session_id":"test","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":"","tool_use_id":"","transcript_path":"","duration_ms":500}' \
   | python3 hooks/post_tool_use.py
 
-# End the simulated session (prints digest, writes report, prunes):
+# Refresh the report silently (fires after every Claude response):
 echo '{"session_id":"test"}' | python3 hooks/stop.py
+
+# End the simulated session (prints digest, writes report, prunes):
+echo '{"session_id":"test"}' | python3 hooks/session_end.py
 ```
 
 Warning: the Stop hook prunes real session directories (MAX_SESSIONS=3). Back up `sessions/` before simulating session lifecycles.
@@ -84,10 +90,12 @@ Warning: the Stop hook prunes real session directories (MAX_SESSIONS=3). Back up
 
 ## End-of-session digest and comparison
 
-When the session ends, `stop.py`:
+When the session actually terminates, `session_end.py`:
 1. Loads the previous session's state via `session.load_previous_state(sid)` — the most recently active session directory other than the current one (by state.json mtime)
 2. Generates `report.md`, including a "Compared With Your Previous Session" table (peak context, error rate, anomalies, turns in WARN/CRITICAL — lower is better for all four) with a one-sentence verdict
 3. Prints an 8-line digest via `reporter.build_digest` to /dev/tty and health.log: final health, peak context, anomaly summary, a one-line takeaway, the comparison, and the report path
+
+`stop.py` does steps 1–2 silently after every Claude response — the report is always fresh mid-session, the digest appears only once, at the true end.
 
 The report's health timeline shows only transitions and noted turns; runs of steady turns collapse into `⋯` marker rows.
 
