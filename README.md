@@ -1,6 +1,8 @@
 # DevFlow Monitor
 
-A passive Claude Code session health monitor. It hooks into every tool call, scores five health signals in real time, and writes a session report when you're done — without changing how you work.
+A passive session health advisor for Claude Code. It hooks into every tool call, scores five health signals in real time, and — when you're done — prints a digest in your terminal, compares the session with your previous one, and writes a full report. Nothing about how you work changes.
+
+It is an advisor, not a linter: the goal is to teach you when to trust the AI's output and when to verify it.
 
 ---
 
@@ -41,19 +43,29 @@ After every tool call, a health line appears in the Claude Code terminal:
 - **turn** — number of tool calls so far in this session
 - **ctx** — context window usage as a bar and percentage of the 200k token limit; at 90%+ Claude starts dropping early context
 
-When you end the session (`/exit` or Ctrl+C), the full report is written automatically:
+When you end the session (`/exit` or Ctrl+C), a digest prints right in your terminal — no need to go looking for anything:
 
 ```
-[17:18:30] REPORT   ~/devflow-monitor/sessions/<session-id>/report.md
+──────────────────────────────────────────────────────────
+ DevFlow Monitor — Session Digest
+ Health:    GOOD(80) final · 89 turns · 0 errors
+ Context:   peaked 82% (164,173 tokens) · ended 17%
+ Anomalies: 1 (repetition ×1) — first at turn 16
+ Takeaway:  context was the limiting factor — next time /compact earlier
+ Last time: peak context 62%→82% · tool error rate 0%→0% · anomalies 5→1
+ Report:    ./show-report   (sessions/latest/report.md)
+──────────────────────────────────────────────────────────
 ```
 
-To read it:
+The `Last time` line compares this session with your previous one — the feedback loop that tells you whether you ran a better session than last time.
+
+To read the full report:
 
 ```bash
-cat ~/devflow-monitor/sessions/<session-id>/report.md
+~/devflow-monitor/show-report
 ```
 
-See [`examples/report_0.md`](examples/report_0.md) for a real session report — includes a narrative overview with verdict and forward recommendation, an annotated health timeline explaining every score change, full anomaly detail with the exact tool input and resolution status, practical guidance per signal, and a "What We Can Learn" section.
+The report includes a narrative overview with verdict and forward recommendation, a comparison table against your previous session, a transitions-only health timeline (steady turns are collapsed, so it reads as a story, not a log), full anomaly detail with the exact tool input and resolution status, and a "What We Can Learn" section. See [`examples/report_0.md`](examples/report_0.md) for a real session report.
 
 ---
 
@@ -66,6 +78,8 @@ Health lines also write to a plain-text log file (`health.log`) inside the sessi
 ```
 
 On Windows Terminal (WSL2) this opens a new tab. Inside a tmux session it opens a new window named `devflow`. Both follow the active session automatically.
+
+The live view opens with an intro explaining what the monitor measures — the five signals, their weights and thresholds, and the available commands. You get the full menu on first run and a compact two-line header after that. The end-of-session digest appears here too.
 
 You can also use the `tail-health` script directly from any terminal:
 
@@ -88,12 +102,14 @@ tail -f ~/devflow-monitor/sessions/<session-id>/health.log
 | Signal | Weight | What triggers a warning |
 |--------|--------|------------------------|
 | Context pressure | 35% | Token usage above 50% of the 200k limit |
-| Response length trend | 25% | Output tokens falling more than 25% over the last 10 turns |
+| Response length trend | 25% | Claude's responses shrinking more than 25% over the last 10 turns |
 | Tool error rate | 20% | More than 10% of tool calls returning errors |
 | Overconfidence | 10% | Certainty words dominating over hedging words in Claude's prose |
 | Repetition | 10% | Same tool + input called 2+ times in a 6-call window |
 
 **Overall health: GOOD ≥ 80 · WARN 55–79 · CRITICAL < 55**
+
+The length trend only counts turns where Claude actually wrote text — silent tool calls (`mkdir`, `git add`, …) are excluded, so they can't fake a degradation signal.
 
 ---
 
@@ -109,7 +125,7 @@ All data is written to `~/devflow-monitor/sessions/`, regardless of which projec
 └── report.md     # full report, written when the session ends
 ```
 
-The last 3 sessions are kept. Older ones are deleted automatically when a session ends.
+The last 3 sessions are kept; older ones are deleted automatically when a session ends. The most recent previous session is what the digest and report compare against, so the feedback loop always has data after your first session.
 
 ---
 
@@ -151,7 +167,7 @@ This writes the hooks into `.claude/settings.json` in that project directory onl
 
 Claude Code calls the hooks as subprocesses after every tool use. There is no background daemon — each invocation is an isolated Python process that runs for under a second.
 
-The `PostToolUse` hook receives a JSON payload on stdin containing the tool name, input, response, and a path to the session transcript. Token counts are read from the transcript (not the payload directly), summing three buckets: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. The `Stop` hook fires when the session ends and generates the report from accumulated state.
+The `PostToolUse` hook receives a JSON payload on stdin containing the tool name, input, response, and a path to the session transcript. Token counts are read from the transcript (not the payload directly), summing three buckets: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. The `Stop` hook fires when the session ends: it loads the previous session's state for comparison, generates the report, and prints the digest to the terminal.
 
 ---
 
@@ -160,14 +176,14 @@ The `PostToolUse` hook receives a JSON payload on stdin containing the tool name
 ```
 devflow-monitor/
 ├── devflow/
-│   ├── session.py       # per-session state (read/write JSON)
+│   ├── session.py       # per-session state; previous-session loader for comparison
 │   ├── signals.py       # extract signals from hook payloads
 │   ├── scorer.py        # heuristic scoring engine
 │   ├── output.py        # terminal output (writes to /dev/tty)
-│   └── reporter.py      # Markdown report generator
+│   └── reporter.py      # Markdown report, end-of-session digest, session comparison
 ├── hooks/
 │   ├── post_tool_use.py # PostToolUse hook — runs after every tool call
-│   └── stop.py          # Stop hook — generates the session report
+│   └── stop.py          # Stop hook — prints the digest, generates the report
 ├── .claude/
 │   └── skills/
 │       └── devflow-log/ # /devflow-log skill (deployed globally by install.py --global)
@@ -175,8 +191,13 @@ devflow-monitor/
 ├── sessions/            # runtime data (gitignored); sessions/latest symlinks to active session
 ├── examples/
 │   └── report_0.md      # real session report for reference
+├── evals/
+│   ├── synthetic_sessions/  # 5 designed test cases
+│   ├── golden_outputs/      # analytically-derived expected results
+│   └── eval_harness.py      # pipeline eval with regression detection
 ├── install.py           # registers hooks + deploys skill to ~/.claude/skills/
-├── tail-health          # opens live health log from any directory
+├── tail-health          # live health log + signals intro, from any directory
+├── show-report          # opens the latest session report, from any directory
 └── tests/
     ├── test_scorer.py       # 54 boundary-case unit tests
     └── visualize_scorer.py  # visual scorer calibration tool

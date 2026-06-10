@@ -274,6 +274,30 @@ correct *overall* outcome — or that a future weight change wouldn't silently s
 should be WARN into GOOD. The eval harness (`evals/eval_harness.py`) was added to close this gap.
 It is described in full in §4.3.
 
+### Iteration 7 — From monitor to advisor: digest, comparison, and a shorter report
+
+The last iteration was driven by the product vision rather than a bug: DevFlow Monitor is meant to
+*teach* engineers when to trust an AI session — and nobody learns from a 143-line report sitting in
+a directory they never open. Four changes followed:
+
+- **End-of-session digest** — the Stop hook now prints an 8-line summary to the terminal the
+  moment the session ends: final health, peak context, anomalies, a one-line takeaway, and where
+  the full report lives. The reflection comes to the engineer, not the other way around.
+- **Session-over-session comparison** — the digest and report compare the session against the
+  previous one (peak context, error rate, anomalies, time in WARN/CRITICAL) with a one-sentence
+  verdict. This closes the feedback loop the educational goal requires: *did I run a better
+  session than last time?*
+- **Report diet** — the health timeline now shows only transitions and notable turns; runs of
+  steady turns collapse into a single marker row. The report reads as a story, not a log.
+- **Intro banner** — the live-log view opens with a menu explaining the five signals, weights,
+  thresholds, and available commands (full version on first run, compact afterwards).
+
+Implementing the comparison surfaced one latent bug: session pruning iterated over the
+`sessions/latest` symlink, and `shutil.rmtree` on a symlink raises — the Stop hook would have
+crashed once enough sessions accumulated. The comparison feature depends on pruning working, so
+the bug became visible the moment the code around it was read with intent. Fixed by excluding
+symlinks from the prune list.
+
 ---
 
 # 3. Critical Reflection — Evaluating and Improving the AI's Output
@@ -512,6 +536,14 @@ hardcoded-values bug lived — a direct demonstration of the accepted risk mater
 **The overconfidence signal at runtime.** Known-dormant in this domain (§3.3). Kept at 10% weight
 so its miscalibration cannot distort the overall score.
 
+**The repetition fingerprint truncates at 120 characters.** `score_repetition` matches calls on
+tool name + the first 120 chars of the stringified input, so two long commands that differ only
+after that point are counted as identical and can trigger a false WARN. Found while extending the
+visual calibration tool with boundary cases, and demonstrated there ("Fingerprint collision" row:
+two different 153-char commands → WARN, repeat count 2). **Risk accepted:** a longer fingerprint
+would weaken detection of near-identical retries — the pattern the signal exists to catch — and at
+10% weight a false WARN costs only 6 health points.
+
 ## 4.5 Bugs Caught — and What Caught Them
 
 | Bug | Caught by | Could the test suite have caught it? |
@@ -549,12 +581,14 @@ The recorded demo shows the monitor working end to end on a live Claude Code ses
 
 1. **Live health lines** — a real session with timestamped health lines appearing on `/dev/tty`
    after every tool call, inside the same terminal Claude Code runs in.
-2. **Second-terminal monitoring** — `./tail-health` (or the `/devflow-log` skill) streaming
-   `sessions/latest/health.log` in real time.
+2. **Second-terminal monitoring** — `./tail-health` (or the `/devflow-log` skill) opening with
+   the signals intro banner, then streaming `sessions/latest/health.log` in real time.
 3. **An anomaly firing** — a deliberately repeated tool call triggering the repetition signal.
-4. **Session end → report** — the Stop hook generating `sessions/<id>/report.md`, walking through
-   the health-over-time table, anomaly detail, and the data-driven "What We Can Learn" section.
-5. **The test stack** — `pytest` (54/54) and the eval harness (5/5) run live.
+4. **Session end → digest** — the Stop hook printing the 8-line digest in the session terminal:
+   final health, anomalies, the takeaway, and the comparison with the previous session.
+5. **The full report** — `./show-report`: the transitions-only timeline, anomaly detail, the
+   previous-session comparison table, and the data-driven "What We Can Learn" section.
+6. **The test stack** — `pytest` (54/54) and the eval harness (5/5) run live.
 
 **Recording link:** _\<added after recording\>_
 

@@ -2,7 +2,7 @@
 
 ## What this project is
 
-A passive Claude Code session health monitor. It hooks into Claude Code's PostToolUse and Stop events, scores five health signals on every tool call, writes health lines to the terminal, and generates a Markdown session report when the session ends.
+A passive session health advisor for Claude Code — an educational tool, not a linter. It hooks into Claude Code's PostToolUse and Stop events, scores five health signals on every tool call, writes health lines to the terminal, and at session end prints a short digest (with a comparison against the previous session) and generates a Markdown report.
 
 This project monitors its own Claude Code sessions — the hooks are installed and active here.
 
@@ -26,13 +26,14 @@ State files:
 |------|------|
 | `devflow/signals.py` | Parses hook payload; reads token counts from transcript file |
 | `devflow/scorer.py` | Pure scoring functions — no I/O, easy to unit test |
-| `devflow/session.py` | Load/save state.json, append events.jsonl, prune old sessions |
+| `devflow/session.py` | Load/save state.json, append events.jsonl, prune old sessions, load previous session for comparison |
 | `devflow/output.py` | Writes to /dev/tty (not stderr) so Claude Code TUI doesn't swallow output; also writes to health.log |
-| `devflow/reporter.py` | Generates the Markdown report from accumulated state |
+| `devflow/reporter.py` | Markdown report, end-of-session digest (`build_digest`), session-over-session comparison |
 | `hooks/post_tool_use.py` | PostToolUse hook — orchestrates signals → scoring → output → state |
-| `hooks/stop.py` | Stop hook — generates report, prunes old sessions |
+| `hooks/stop.py` | Stop hook — prints digest, generates report (with comparison), prunes old sessions |
 | `install.py` | Registers hooks in Claude Code settings (--global or project-scoped); also deploys /devflow-log skill |
-| `tail-health` | Opens live tail of sessions/latest/health.log from any directory |
+| `tail-health` | Live tail of sessions/latest/health.log; prints the signals intro banner first (full on first run, compact after — marker: `sessions/.intro_shown`) |
+| `show-report` | Opens sessions/latest/report.md from any directory (glow if available, else $PAGER) |
 | `evals/eval_harness.py` | Replays synthetic sessions through scorer.py, compares against golden outputs |
 
 ## Signals and weights
@@ -46,6 +47,8 @@ State files:
 | repetition | 10% | WARN at 2× same call in 6-call window, CRITICAL at 3× |
 
 Overall: GOOD ≥ 80, WARN 55–79, CRITICAL < 55.
+
+length_trend only tracks turns where Claude wrote non-empty text — silent tool calls (mkdir, git add) are filtered out in `post_tool_use.py` so their near-zero responses can't collapse the late-window average into a false CRITICAL.
 
 ## Token counts
 
@@ -68,15 +71,29 @@ python3 evals/eval_harness.py       # pipeline eval across 5 synthetic sessions
 ```bash
 echo '{"session_id":"test","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":"","tool_use_id":"","transcript_path":"","duration_ms":500}' \
   | python3 hooks/post_tool_use.py
+
+# End the simulated session (prints digest, writes report, prunes):
+echo '{"session_id":"test"}' | python3 hooks/stop.py
 ```
+
+Warning: the Stop hook prunes real session directories (MAX_SESSIONS=3). Back up `sessions/` before simulating session lifecycles.
 
 ## Output goes to /dev/tty
 
 `output.py` writes to `/dev/tty` directly, not stderr. Claude Code's TUI redraws after each tool call and swallows stderr from hook subprocesses. `/dev/tty` bypasses TUI rendering. Falls back to stderr if /dev/tty is unavailable.
 
+## End-of-session digest and comparison
+
+When the session ends, `stop.py`:
+1. Loads the previous session's state via `session.load_previous_state(sid)` — the most recently active session directory other than the current one (by state.json mtime)
+2. Generates `report.md`, including a "Compared With Your Previous Session" table (peak context, error rate, anomalies, turns in WARN/CRITICAL — lower is better for all four) with a one-sentence verdict
+3. Prints an 8-line digest via `reporter.build_digest` to /dev/tty and health.log: final health, peak context, anomaly summary, a one-line takeaway, the comparison, and the report path
+
+The report's health timeline shows only transitions and noted turns; runs of steady turns collapse into `⋯` marker rows.
+
 ## Session pruning
 
-`session.MAX_SESSIONS = 3` — old session directories beyond this limit are deleted by the Stop hook. Change this constant to keep more or fewer sessions. A `sessions/latest` symlink is maintained by `save_state` and always points to the most recently active session.
+`session.MAX_SESSIONS = 3` — old session directories beyond this limit are deleted by the Stop hook. Change this constant to keep more or fewer sessions (the comparison only needs one previous session). A `sessions/latest` symlink is maintained by `save_state` and always points to the most recently active session. Pruning skips symlinks — `shutil.rmtree` on a symlink raises, which used to crash the Stop hook once 4+ entries accumulated.
 
 ## Anomaly storage format
 
@@ -91,6 +108,10 @@ The reporter handles legacy string anomalies (from before this change) by readin
 ### Overconfidence scorer is inactive in code-writing context
 
 The overconfidence scorer returned GOOD(100) on every turn of a real 89-turn session. Claude Code's language is assertive by nature — it writes code and explains decisions without hedging. Words like "definitely" and "obviously" are rare in engineering output. The certainty word list was calibrated for conversational text. Weight kept at 10% intentionally — low enough that miscalibration doesn't distort the overall score. The correct fix is a domain-specific word list calibrated on real Claude Code transcripts.
+
+### Repetition fingerprint truncates at 120 chars
+
+`score_repetition` matches calls on tool name + the first 120 chars of the stringified input. Two long commands that differ only after that point (e.g., similar `sed`/`curl` invocations with different tails) are counted as the same call and can trigger a false WARN. Demonstrated in `tests/visualize_scorer.py` ("Fingerprint collision"). Accepted: longer fingerprints make near-identical retries (the real signal) harder to catch, and at 10% weight a false WARN costs 6 health points.
 
 ### Alternating long/short responses do not cause false positives
 
