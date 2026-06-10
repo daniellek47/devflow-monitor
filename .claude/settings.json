@@ -20,6 +20,16 @@
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /home/danielle/projects/drivenets-assignment/devflow-monitor/hooks/session_end.py"
+          }
+        ]
+      }
     ]
   }
 }

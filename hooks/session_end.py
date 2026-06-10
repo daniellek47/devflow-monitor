@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Stop hook — fires every time Claude finishes responding to a prompt
-(NOT at session end; that is the SessionEnd event, see session_end.py).
+"""SessionEnd hook — fires when the Claude Code session actually terminates
+(/exit, Ctrl+C, /clear). Generates the final report and prints the digest.
 
-Silently refreshes the session report so show-report is always current
-mid-session. The digest is printed by the SessionEnd hook only."""
+Not to be confused with the Stop event, which fires every time Claude
+finishes responding to a prompt — that one only refreshes the report."""
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from devflow import session, signals, reporter
+from devflow import session, signals, reporter, output
+
 
 def main() -> None:
     payload = signals.parse_hook_payload()
@@ -21,8 +22,12 @@ def main() -> None:
         sys.exit(0)
 
     session_path = session.get_session_path(sid)
+    output.set_log_file(session_path / "health.log")
+
     prev_state = session.load_previous_state(sid)
     reporter.generate_report(sid, state, session_path, prev_state)
+
+    output.emit_block(reporter.build_digest(state, prev_state))
 
     session.prune_old_sessions()
 

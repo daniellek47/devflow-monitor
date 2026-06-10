@@ -33,6 +33,7 @@ def main() -> None:
 
     post_tool_hook = str(HOOKS_DIR / "post_tool_use.py")
     stop_hook = str(HOOKS_DIR / "stop.py")
+    session_end_hook = str(HOOKS_DIR / "session_end.py")
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -47,6 +48,7 @@ def main() -> None:
         hooks = existing.get("hooks", {})
         hooks.pop("PostToolUse", None)
         hooks.pop("Stop", None)
+        hooks.pop("SessionEnd", None)
         existing["hooks"] = hooks
         settings_path.write_text(json.dumps(existing, indent=2))
         print(f"Hooks removed from {settings_path}")
@@ -62,6 +64,11 @@ def main() -> None:
         "Stop": [
             {
                 "hooks": [{"type": "command", "command": f"{PYTHON} {stop_hook}"}]
+            }
+        ],
+        "SessionEnd": [
+            {
+                "hooks": [{"type": "command", "command": f"{PYTHON} {session_end_hook}"}]
             }
         ],
     })
